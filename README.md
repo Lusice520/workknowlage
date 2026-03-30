@@ -3,7 +3,7 @@
 
 # WorkKnowlage
 
-WorkKnowlage is an open-source lightweight local-first knowledge base application for macOS Apple Silicon devices. It is designed to help users organize, connect, and retrieve knowledge in a more structured way, while providing a foundation for future AI-assisted workflows such as summarization, retrieval, and question answering.
+WorkKnowlage is a lightweight local-first knowledge base application for macOS Apple Silicon devices. It is designed as an Obsidian-like knowledge workflow tool with additional extensible capabilities, focused on structured knowledge organization, local control, and future AI-assisted workflows.
 
 ## Features
 
@@ -14,6 +14,11 @@ WorkKnowlage is an open-source lightweight local-first knowledge base applicatio
 - Tags
 - Bidirectional links
 - Block-based editing powered by BlockNote
+- Custom callout module
+- Advanced table support
+- Favorites
+- Sharing
+- Export to Markdown, Word, and PDF
 
 ### In Progress
 - Graph view
@@ -39,6 +44,8 @@ It is built as a lightweight local-first knowledge system for users who want:
 - local ownership of knowledge
 - a simpler workflow than heavier knowledge tools
 - structured document connections through tags and bidirectional links
+- enhanced editing capabilities such as custom callouts and advanced tables
+- practical knowledge usage features such as sharing, export, and favorites
 - a foundation for richer knowledge workflows over time
 
 ## Current Status
@@ -63,6 +70,11 @@ This repository is currently best suited for early adopters, developers, and con
 - [x] Search
 - [x] Tags
 - [x] Bidirectional links
+- [x] Custom callout module
+- [x] Advanced table support
+- [x] Favorites
+- [x] Sharing
+- [x] Export to Markdown, Word, and PDF
 
 ### v0.2
 - [ ] Graph view
@@ -111,7 +123,7 @@ Detailed build instructions will be documented as the project evolves.
 
 Many knowledge tools are either too heavy, too cloud-dependent, or too generic for practical local knowledge workflows.
 
-WorkKnowlage explores a different direction: a lightweight, local-first, extensible knowledge base that supports structured knowledge organization today and AI-assisted knowledge workflows in the future.
+WorkKnowlage explores a different direction: a lightweight, local-first, extensible knowledge base that supports structured knowledge organization, enhanced editing capabilities, practical document usage features, and future AI-assisted knowledge workflows.
 
 ## Contributing
 
@@ -120,6 +132,10 @@ Contributions, ideas, and feedback are welcome.
 - Open an issue for bugs, ideas, or feature requests
 - Submit a pull request for focused improvements
 - Keep changes clear and well-described
+
+## Development Note
+
+WorkKnowlage is primarily developed with Codex as part of an AI-assisted development workflow.
 
 ## License
 
