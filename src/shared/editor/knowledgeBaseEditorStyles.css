@@ -1,0 +1,15 @@
+@import url("./knowledgeBaseMantineStyles.css");
+@import url("../../../node_modules/@blocknote/mantine/src/blocknoteStyles.css");
+
+/* Keep BlockNote text color tokens aligned with the app palette. */
+[data-style-type="textColor"][data-value="green"],
+[data-text-color="green"],
+.bn-block:has(> .bn-block-content[data-text-color="green"]) {
+  color: #2f7a5f;
+}
+
+[data-style-type="textColor"][data-value="blue"],
+[data-text-color="blue"],
+.bn-block:has(> .bn-block-content[data-text-color="blue"]) {
+  color: #2f6fdd;
+}

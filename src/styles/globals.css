@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --wk-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --wk-ink: #1c2738;
+  --wk-ink-soft: #50607b;
+  --wk-copy: #3f4d64;
+  --wk-muted: #8694ab;
+  --wk-subtle: #a1aec2;
+  --wk-accent: #2f68dd;
+  --wk-folder: #e4a63b;
+  --wk-bg: #eef3f8;
+  --wk-sidebar: rgba(245, 248, 251, 0.88);
+  --wk-canvas: rgba(255, 255, 255, 0.86);
+  --wk-border: rgba(165, 180, 201, 0.24);
+  --wk-border-strong: rgba(93, 130, 188, 0.22);
+  --wk-rail: rgba(203, 214, 228, 0.92);
+  color: var(--wk-ink);
+  background: var(--wk-bg);
+  font-family: var(--wk-font-family);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--wk-bg);
+  overflow: hidden;
+  font-size: 13.5px;
+  font-family: var(--wk-font-family);
+  font-weight: 450;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  overflow: hidden;
+}
+
+@layer utilities {
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.4);
+    border-radius: 4px;
+    transition: background-color 0.2s;
+  }
+  
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.6);
+  }
+}
