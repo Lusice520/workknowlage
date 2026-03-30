@@ -133,10 +133,6 @@ Contributions, ideas, and feedback are welcome.
 - Submit a pull request for focused improvements
 - Keep changes clear and well-described
 
-## Development Note
-
-WorkKnowlage is primarily developed with Codex as part of an AI-assisted development workflow.
-
 ## License
 
 WorkKnowlage is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for details.
