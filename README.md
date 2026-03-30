@@ -110,6 +110,9 @@ The project is evolving toward a more complete workflow that connects planning, 
 - [ ] Stronger AI-assisted execution support
 - [ ] Reusable foundation for internal work operating systems
 
+WorkKnowlage addresses a common gap in the ecosystem: critical delivery knowledge is often fragmented across tools and difficult to turn into executable work.
+The project is designed to support AI-native workflows for planning, retrieval, analysis, and execution assistance.
+
 ## Getting Started
 
 This repository is currently under active development.
