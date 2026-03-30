@@ -1,2 +1,3 @@
 # workknowlage
-<img width="1799" height="1043" alt="image" src="https://github.com/user-attachments/assets/89f6102b-a69e-4ea3-a74d-bf0d8ade2ff0" />
+<img width="1787" height="1025" alt="image" src="https://github.com/user-attachments/assets/66b91da5-dd79-408c-8fb2-b830bdbcb44d" />
+
