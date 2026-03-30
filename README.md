@@ -1,129 +1,125 @@
 # workknowlage
 <img width="1787" height="1025" alt="image" src="https://github.com/user-attachments/assets/66b91da5-dd79-408c-8fb2-b830bdbcb44d" />
+
 # WorkKnowlage
 
-WorkKnowlage is an open-source work knowledge system for product and engineering teams. It helps teams connect planning, requirements, issues, versions, and execution into one structured workflow, turning scattered knowledge into executable work.
+WorkKnowlage is an open-source lightweight local-first knowledge base application for macOS Apple Silicon devices. It is designed to help users organize, connect, and retrieve knowledge in a more structured way, while providing a foundation for future AI-assisted workflows such as summarization, retrieval, and question answering.
 
-## Why WorkKnowlage
+## Features
 
-In many teams, critical delivery knowledge is fragmented across documents, chats, spreadsheets, issue trackers, and release notes. This makes planning hard to reuse, execution hard to trace, and context easy to lose.
+### Available
+- Local document management
+- Directory tree navigation
+- Full-text search
+- Tags
+- Bidirectional links
+- Block-based editing powered by BlockNote
 
-WorkKnowlage is designed to solve this problem by providing a structured system for organizing work knowledge and linking it directly to execution.
+### In Progress
+- Graph view
+- Document classification and organization improvements
+- Document templates
+- Local database-oriented knowledge management
+- AI summarization
+- AI retrieval
+- AI Q&A
 
-## Core Value
+## Tech Stack
 
-- Turn fragmented project information into structured work knowledge
-- Connect planning, requirements, defects, versions, and execution
-- Improve traceability from idea to delivery
-- Support product, engineering, and AI-assisted workflows
-- Provide reusable infrastructure for knowledge-driven project management
+- **Framework:** Electron
+- **Editor:** BlockNote
+- **Platform:** macOS Apple Silicon (M-series)
 
-## Key Features
+## Positioning
 
-### 1. Planning and WBS Management
-- Create structured monthly or milestone-based work plans
-- Support hierarchical WBS-style planning
-- Break down goals into work packages and tasks
-- Track ownership and progress across the plan
+WorkKnowlage is not intended to be just another generic note-taking app.
 
-### 2. Requirement and Issue Linking
-- Link plans to requirements, defects, and delivery items
-- Maintain context between product decisions and execution
-- Improve alignment across product, engineering, and QA
+It is built as a lightweight local-first knowledge system for users who want:
 
-### 3. Version-Oriented Execution
-- Associate work plans with versions or releases
-- Trace what is planned, what is delivered, and what remains open
-- Build a clearer delivery view for project teams
+- local ownership of knowledge
+- a simpler workflow than heavier knowledge tools
+- structured document connections through tags and bidirectional links
+- a foundation for richer knowledge workflows over time
 
-### 4. Work Knowledge Structuring
-- Organize project knowledge into reusable, structured entities
-- Reduce dependency on scattered documents and manual status tracking
-- Make team knowledge easier to retrieve and act on
+## Current Status
 
-### 5. AI-Assisted Workflow Potential
-- Requirement summarization
-- Defect and issue analysis
-- Planning assistance
-- Knowledge retrieval across project artifacts
-- Workflow recommendations and automation
+WorkKnowlage is currently in active development.
 
-## Typical Use Cases
+At this stage:
 
-- Product planning and execution management
-- Requirement and version coordination
-- Defect tracking with business context
-- Team knowledge accumulation and reuse
-- AI-enhanced project delivery workflows
-- Internal systems for product and engineering organizations
+- it primarily targets **macOS Apple Silicon (M-series)**
+- it does **not** provide a prebuilt release yet
+- users need to **build the application locally and generate the `.dmg` package themselves**
 
-## Project Vision
-
-WorkKnowlage aims to become a reusable open-source foundation for knowledge-driven work management.
-
-The long-term goal is not only to record work, but to make work knowledge structured, connected, traceable, and executable.
-
-## Status
-
-WorkKnowlage is currently in active development.  
-The project is evolving toward a more complete workflow that connects planning, requirements, issues, versions, and execution.
+This repository is currently best suited for early adopters, developers, and contributors.
 
 ## Roadmap
 
-### V0.1
-- [ ] Initial project structure
-- [ ] Core README and open-source setup
-- [ ] MIT License
-- [ ] Basic planning model
-- [ ] Basic work item structure
+### v0.1
+- [x] Electron-based macOS application foundation
+- [x] BlockNote editor integration
+- [x] Local document support
+- [x] Directory tree
+- [x] Search
+- [x] Tags
+- [x] Bidirectional links
 
-### V0.2
-- [ ] WBS-style plan tree
-- [ ] Work package and task hierarchy
-- [ ] Owner, status, and progress tracking
-- [ ] Basic requirement linking
-- [ ] Basic issue/defect linking
+### v0.2
+- [ ] Graph view
+- [ ] Improved navigation and browsing
+- [ ] Better document classification
+- [ ] More robust local persistence
 
-### V0.3
-- [ ] Version and release association
-- [ ] Delivery-oriented traceability
-- [ ] Requirement-to-version mapping
-- [ ] Defect-to-version tracking
-- [ ] Plan execution dashboard
+### v0.3
+- [ ] Document templates
+- [ ] Richer metadata support
+- [ ] Enhanced document management
+- [ ] Better structured organization
 
-### V0.4
-- [ ] Knowledge retrieval across project artifacts
-- [ ] Search and filtering capabilities
-- [ ] Cross-object relationship views
-- [ ] Reusable work knowledge templates
+### v0.4
+- [ ] Local database-oriented knowledge management
+- [ ] More scalable indexing
+- [ ] Improved filtering and retrieval
 
-### V0.5
-- [ ] AI-assisted requirement summarization
-- [ ] AI-assisted planning suggestions
-- [ ] Defect clustering and analysis
-- [ ] Knowledge-based workflow recommendations
+### v0.5
+- [ ] AI summarization
+- [ ] AI retrieval
+- [ ] AI Q&A
+- [ ] Smarter knowledge assistance workflows
 
-### Future Direction
-- [ ] Open API and extensibility
-- [ ] Multi-team collaboration support
-- [ ] More complete workflow automation
-- [ ] Stronger AI-assisted execution support
-- [ ] Reusable foundation for internal work operating systems
+### Future
+- [ ] Prebuilt release packages
+- [ ] Easier installation experience
+- [ ] Broader macOS support
+- [ ] More extensible architecture
+- [ ] Stronger local-first AI integration
 
-WorkKnowlage addresses a common gap in the ecosystem: critical delivery knowledge is often fragmented across tools and difficult to turn into executable work.
-The project is designed to support AI-native workflows for planning, retrieval, analysis, and execution assistance.
+## Build
 
-## Getting Started
+WorkKnowlage currently does not provide a prebuilt release package.
 
-This repository is currently under active development.
+To use it, you need to:
 
-More setup instructions, architecture details, and usage examples will be added as the project evolves.
+1. Clone the repository
+2. Set up the local development environment
+3. Build the project locally
+4. Generate the `.dmg` package for installation
+
+Detailed build instructions will be documented as the project evolves.
+
+## Why This Project
+
+Many knowledge tools are either too heavy, too cloud-dependent, or too generic for practical local knowledge workflows.
+
+WorkKnowlage explores a different direction: a lightweight, local-first, extensible knowledge base that supports structured knowledge organization today and AI-assisted knowledge workflows in the future.
 
 ## Contributing
 
 Contributions, ideas, and feedback are welcome.
 
-If you would like to contribute, please open an issue or submit a pull request.
+- Open an issue for bugs, ideas, or feature requests
+- Submit a pull request for focused improvements
+- Keep changes clear and well-described
 
 ## License
 
