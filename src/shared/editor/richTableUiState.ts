@@ -4,6 +4,7 @@ interface RichTableToolbarVisibilityState {
   isEditable: boolean;
   isFocused: boolean;
   isTableActive: boolean;
+  isTableHovered: boolean;
   isToolbarHovered: boolean;
   openColMenu: boolean;
   openColorMenu: boolean;
@@ -16,6 +17,7 @@ export const shouldShowRichTableToolbar = ({
   isEditable,
   isFocused,
   isTableActive,
+  isTableHovered,
   isToolbarHovered,
   openColMenu,
   openColorMenu,
@@ -28,6 +30,7 @@ export const shouldShowRichTableToolbar = ({
   return (
     hasActiveSelection ||
     hasCollapsedCellCursor ||
+    isTableHovered ||
     isToolbarHovered ||
     openColorMenu ||
     openRowMenu ||

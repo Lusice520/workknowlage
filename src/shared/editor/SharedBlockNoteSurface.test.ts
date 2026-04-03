@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getDocumentMentionItems } from './editorSchema';
-import { isEditorComposingInput } from './SharedBlockNoteSurface';
+import { isEditorComposingInput, shouldTrapArrowLeftAfterRichTable } from './SharedBlockNoteSurface';
 
 test('treats IME composition as a bypass condition for custom editor shortcuts', () => {
   expect(
@@ -22,6 +22,60 @@ test('treats IME composition as a bypass condition for custom editor shortcuts',
     isEditorComposingInput({
       editor: { prosemirrorView: { composing: false } },
       event: { isComposing: false } as KeyboardEvent,
+    })
+  ).toBe(false);
+});
+
+test('traps ArrowLeft at the start of an empty paragraph after a rich table', () => {
+  expect(
+    shouldTrapArrowLeftAfterRichTable({
+      event: {
+        key: 'ArrowLeft',
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+      currentBlock: {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '' }],
+      },
+      prevBlock: {
+        type: 'richTable',
+      },
+      selection: {
+        empty: true,
+        $from: {
+          parentOffset: 0,
+        },
+      },
+    })
+  ).toBe(true);
+});
+
+test('does not trap ArrowLeft when the paragraph after a rich table already has content', () => {
+  expect(
+    shouldTrapArrowLeftAfterRichTable({
+      event: {
+        key: 'ArrowLeft',
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+      currentBlock: {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'x' }],
+      },
+      prevBlock: {
+        type: 'richTable',
+      },
+      selection: {
+        empty: true,
+        $from: {
+          parentOffset: 0,
+        },
+      },
     })
   ).toBe(false);
 });

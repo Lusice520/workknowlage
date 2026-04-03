@@ -7,10 +7,18 @@ test('styles rich table editor surface and edge handles like the WorkPlan implem
 
   expect(css).toContain('.rt-container {');
   expect(css).toContain('padding: 4px 0;');
+  expect(css).toContain('.rt-scroll-shell {');
+  expect(css).toContain('overflow-x: auto;');
+  expect(css).toContain('.rt-scroll-track {');
+  expect(css).toContain('min-width: var(--rt-track-min-width, 100%);');
+  expect(css).toContain('.rt-top-toolbar-portal {');
+  expect(css).toContain('position: fixed;');
+  expect(css).toContain('.rt-floating-controls-portal {');
   expect(css).toContain('.rt-editor-shell {');
   expect(css).toContain('min-height: 0;');
   expect(css).toContain('.rt-editor {');
   expect(css).toContain('.rt-editor .tableWrapper {');
+  expect(css).toContain('overflow: visible;');
   expect(css).toContain('.rt-editor ul {');
   expect(css).toContain('list-style-type: disc;');
   expect(css).toContain('.rt-editor ol {');
@@ -18,12 +26,18 @@ test('styles rich table editor surface and edge handles like the WorkPlan implem
   expect(css).toContain('.rt-editor li {');
   expect(css).toContain('display: list-item;');
   expect(css).toContain('.rt-editor table {');
-  expect(css).toContain('width: max(100%, max-content);');
+  expect(css).toContain('min-width: var(--rt-track-min-width, 100%);');
   expect(css).toContain('.rt-editor th,');
   expect(css).toContain('.rt-editor td {');
   expect(css).toContain('border: 1px solid #e2e8f0;');
   expect(css).toContain('.rt-editor th {');
   expect(css).toContain('background: #f8fafc;');
+  expect(css).toContain('.rt-top-toolbar {');
+  expect(css).toContain('position: relative;');
+  expect(css).toContain('transform: translateY(0);');
+  expect(css).toContain('flex-shrink: 0;');
+  expect(css).not.toContain('margin: 0 0 10px 0;');
+  expect(css).not.toContain('padding-bottom: 28px;');
   expect(css).toContain('.rt-container .bn-extend-button-add-remove-columns,');
   expect(css).toContain('.rt-container .bn-extend-button-add-remove-rows {');
   expect(css).toContain('display: none !important;');
@@ -31,4 +45,9 @@ test('styles rich table editor surface and edge handles like the WorkPlan implem
   expect(css).toContain('.rt-table-grip.col {');
   expect(css).toContain('.rt-add-col-handle {');
   expect(css).toContain('.rt-add-row-handle {');
+  expect(css).not.toContain('transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);');
+  expect(css).toContain('transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),');
+  expect(css).not.toMatch(/\.rt-add-col-handle:hover,\s*\.rt-add-row-handle:hover\s*\{[^}]*scale\(/s);
+  expect(css).toContain('.rt-mini-text {');
+  expect(css).toContain('white-space: nowrap;');
 });

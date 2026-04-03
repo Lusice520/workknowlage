@@ -19,7 +19,7 @@ import { KnowledgeBaseFormattingToolbar } from './KnowledgeBaseFormattingToolbar
 import { KnowledgeBaseImagePreview } from './KnowledgeBaseImagePreview';
 import { SelectionFormattingToolbarController } from './SelectionFormattingToolbarController';
 import { getCursorScrollDelta } from './scrollUtils';
-import { blockNeedsTrailingParagraph, getDomActiveBlockId } from './editorBodyFocusUtils';
+import { blockNeedsTrailingParagraph, getDomActiveBlockId, getDomActiveSelectionRect } from './editorBodyFocusUtils';
 import type { MentionDocumentCandidate } from '../types/workspace';
 import './SharedBlockNoteSurface.css';
 
@@ -37,6 +37,31 @@ export const isEditorComposingInput = ({
   editor: any;
   event?: Pick<KeyboardEvent, 'isComposing'> | null;
 }) => Boolean(event?.isComposing || editor?.prosemirrorView?.composing);
+
+export const shouldTrapArrowLeftAfterRichTable = ({
+  event,
+  currentBlock,
+  prevBlock,
+  selection,
+}: {
+  event?: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'ctrlKey' | 'metaKey' | 'altKey'> | null;
+  currentBlock?: any;
+  prevBlock?: any;
+  selection?: {
+    empty?: boolean;
+    $from?: {
+      parentOffset?: number;
+    } | null;
+  } | null;
+}) => {
+  if (!event || event.key !== 'ArrowLeft') return false;
+  if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (prevBlock?.type !== 'richTable') return false;
+  if (currentBlock?.type !== 'paragraph') return false;
+  if (hasInlineTextContent(currentBlock.content)) return false;
+  if (!selection?.empty) return false;
+  return Number(selection?.$from?.parentOffset ?? -1) === 0;
+};
 
 const getBlockPlainText = (block: any) => {
   if (!block?.content) return '';
@@ -415,10 +440,28 @@ export const SharedBlockNoteSurface = ({
       }
 
       const target = event.target instanceof Element ? event.target : null;
+      const cursor = editor.getTextCursorPosition?.();
+      const currentBlock = cursor?.block;
+      const prevBlock = currentBlock?.id ? editor.getPrevBlock?.(currentBlock.id) : cursor?.prevBlock;
+      const selection = editor.prosemirrorView?.state?.selection;
       const selectedBlocks = editor.getSelection()?.blocks;
       const selectedBlock = Array.isArray(selectedBlocks) && selectedBlocks.length === 1 ? selectedBlocks[0] : null;
       const blocks = Array.isArray(editor.document) ? editor.document : [];
       const fallbackBlock = blocks[blocks.length - 1];
+
+      if (
+        !target?.closest('.rt-editor') &&
+        shouldTrapArrowLeftAfterRichTable({
+          event,
+          currentBlock,
+          prevBlock,
+          selection,
+        })
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
 
       if (
         event.key === 'Enter' &&
@@ -848,15 +891,20 @@ export const SharedBlockNoteSurface = ({
 
         const scrollerRect = scroller.getBoundingClientRect();
         const blockRect = (blockEl as HTMLElement).getBoundingClientRect();
+        const caretRect = getDomActiveSelectionRect({
+          selection,
+          rootElement: scroller,
+        });
+        const targetRect = caretRect ?? blockRect;
         const scrollerHeight = Math.max(0, scrollerRect.bottom - scrollerRect.top);
         if (scrollerHeight <= 0) return;
         const safeBottom = scrollerRect.bottom - scrollerHeight * visibleZoneRatio;
-        const bottomOverflow = blockRect.bottom - safeBottom;
+        const bottomOverflow = targetRect.bottom - safeBottom;
 
         const bottomDelta = getCursorScrollDelta({
           scrollerTop: scrollerRect.top,
           scrollerBottom: scrollerRect.bottom,
-          blockBottom: blockRect.bottom,
+          blockBottom: targetRect.bottom,
           visibleZoneRatio,
           minDelta: 1,
         });
@@ -885,7 +933,7 @@ export const SharedBlockNoteSurface = ({
           return;
         }
 
-        const topOverflow = blockRect.top - (scrollerRect.top + topThreshold);
+        const topOverflow = targetRect.top - (scrollerRect.top + topThreshold);
         if (topOverflow < -minDelta) {
           scroller.scrollBy({ top: topOverflow, behavior: 'auto' });
         }

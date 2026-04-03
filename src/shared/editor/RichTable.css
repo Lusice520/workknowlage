@@ -10,6 +10,52 @@
   outline: none !important;
 }
 
+.rt-scroll-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+
+.rt-scroll-track {
+  position: relative;
+  min-width: var(--rt-track-min-width, 100%);
+  width: max(100%, var(--rt-track-min-width, 100%));
+  padding-right: 28px;
+}
+
+.rt-top-toolbar-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 240;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.rt-floating-controls-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 230;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.rt-floating-controls-portal .rt-table-grip,
+.rt-floating-controls-portal .rt-handle-menu,
+.rt-floating-controls-portal .rt-add-col-handle,
+.rt-floating-controls-portal .rt-add-row-handle {
+  pointer-events: auto;
+}
+
 /* BlockNote default selected-node outline is too heavy for RichTable. */
 .ProseMirror-selectednode > .bn-block-content[data-content-type="richTable"] > *,
 .bn-block-content[data-content-type="richTable"].ProseMirror-selectednode > * {
@@ -43,6 +89,7 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .rt-icon-btn:hover:not(:disabled) {
@@ -67,11 +114,9 @@
   flex-wrap: nowrap;
   gap: 6px;
   overflow: visible;
-  position: absolute;
-  z-index: 120;
+  position: relative;
   width: fit-content;
-  max-width: calc(100% - 24px);
-  margin: 0;
+  max-width: none;
   padding: 6px;
   border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 10px;
@@ -79,7 +124,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
-  transition: opacity 0.12s ease, transform 0.12s ease, top 0.2s cubic-bezier(0.16, 1, 0.3, 1), left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.12s ease, transform 0.12s ease;
   pointer-events: auto;
 }
 
@@ -107,6 +152,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .rt-color-wrap {
@@ -176,30 +222,27 @@
 .rt-editor-shell {
   position: relative;
   box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
+  width: max(100%, var(--rt-track-min-width, 100%));
+  max-width: none;
   min-width: 0;
   overflow: visible;
   padding-right: 8px;
-  padding-bottom: 4px;
   min-height: 0;
 }
 
 .rt-editor-content {
   min-height: 40px;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: visible;
   overflow-y: visible;
-  overscroll-behavior-x: contain;
-  scrollbar-gutter: stable;
 }
 
 .rt-editor {
   padding: 0;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   min-width: 0;
   outline: none;
 }
@@ -231,10 +274,9 @@
 .rt-editor .tableWrapper {
   display: block;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
@@ -243,9 +285,8 @@
 
 .rt-editor table {
   border-collapse: collapse;
-  width: 100%;
-  width: max(100%, max-content);
-  min-width: 100%;
+  width: max(100%, var(--rt-track-min-width, 100%));
+  min-width: var(--rt-track-min-width, 100%);
   table-layout: fixed;
   border-style: hidden;
 }
@@ -279,7 +320,11 @@
   justify-content: center;
   transform: translate(-50%, -50%);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .rt-add-col-handle,
@@ -303,13 +348,34 @@
   cursor: row-resize;
 }
 
+.rt-add-col-handle::before,
+.rt-add-row-handle::before {
+  content: "";
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+}
+
+.rt-add-col-handle::before {
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 12px;
+}
+
+.rt-add-row-handle::before {
+  left: 0;
+  right: 0;
+  top: -8px;
+  height: 12px;
+}
+
 .rt-add-col-handle:hover,
 .rt-add-row-handle:hover {
   background: #eff6ff;
   border-color: #bfdbfe;
   color: #3b82f6;
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
-  transform: translate(-50%, -50%) scale(1.03);
 }
 
 .rt-add-col-handle:focus-visible,
