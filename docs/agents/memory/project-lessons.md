@@ -8,6 +8,8 @@
 
 2026-05-14: 右侧相似内容不是全文搜索结果，而是 `sidebarAssociations` 对同一 workspace 内的文档块候选做 token overlap、ratio 和 coverage threshold 过滤。短句或标题式内容命中长段落时，可能因为 `MIN_DOCUMENT_COVERAGE_RATIO` 过高被过滤；短于 meaningful body threshold 的独立短句也可能不进入候选。排查“相似内容未显示”时，先检查候选文本、同空间过滤、块类型支持和阈值，不要误判为搜索索引未重建。
 
+2026-05-15: 右侧栏 Wiki 的“相关主题 hover 相似处”和“原文线索”都属于解释同一个目标文档为什么相关的证据。不要再把它们拆成两个主列表；`sidebarAssociations` 应输出 `associatedDocuments`，`RightSidebar` 展示“关联文档”，卡片内用 `主题相似`、`局部相似`、`原文命中` 标签和 hover 证据预览承载具体命中，点击证据再定位块。
+
 ## Search Highlighting
 
 Workspace search highlighting 当前只标记 preview 里的 direct query-part matches。除非明确实现并测试过，不要假设 fuzzy-span highlighting 已存在。
