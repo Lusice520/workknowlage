@@ -48,7 +48,7 @@ test('renders the compact article structure and visible share feedback', async (
   });
 
   const favoriteButton = await screen.findByRole('button', { name: '收藏文档 创意草案' });
-  const shareButton = await screen.findByRole('button', { name: '开启分享' });
+  const shareButton = await screen.findByRole('button', { name: '分享' });
 
   expect(title.className).toContain('text-[22px]');
   expect(screen.getByRole('button', { name: '保存状态：已自动保存' })).toBeInTheDocument();
@@ -59,6 +59,9 @@ test('renders the compact article structure and visible share feedback', async (
   expect(screen.getByText('分享未开启')).toBeInTheDocument();
   expect(screen.queryByText('已自动保存')).not.toBeInTheDocument();
   expect(screen.queryByText('开启分享')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '复制分享链接' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '刷新分享地址' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '关闭分享' })).not.toBeInTheDocument();
   expect(screen.getAllByText('1,240 字')).toHaveLength(1);
 
   expect(screen.queryByText('先接 SQLite 数据层')).not.toBeInTheDocument();
@@ -78,12 +81,23 @@ test('renders the compact article structure and visible share feedback', async (
   });
 
   await user.click(shareButton);
+  const enableShareItem = await screen.findByRole('menuitem', { name: '开启并复制链接' });
+  expect(screen.queryByRole('menuitem', { name: '刷新分享地址' })).not.toBeInTheDocument();
+
+  await user.click(enableShareItem);
 
   await waitFor(() => {
     expect(screen.getByText('已复制分享链接')).toBeInTheDocument();
   });
 
-  expect(screen.getByRole('button', { name: '复制分享链接' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '重新生成分享链接' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '关闭分享' })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: '分享' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: '复制分享链接' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '重新生成分享链接' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '关闭分享' })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: '分享' }));
+
+  expect(screen.getByRole('menuitem', { name: '复制分享链接' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '刷新分享地址' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '关闭分享' })).toBeInTheDocument();
 }, 10000);

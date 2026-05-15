@@ -3,17 +3,43 @@ import { getQuickNoteTitle } from '../shared/lib/quickNotes';
 import { deriveOutlineFromContentJson } from '../shared/lib/documentContent';
 import { getWorkKnowlageApi } from '../shared/lib/workKnowlageApi';
 import type { UploadAssetInput } from '../shared/types/preload';
+import type { WorkspaceState } from '../shared/types/workspace';
 import type { WorkspaceSessionActionsOptions, WorkspaceSessionActionsState } from './workspaceSessionActionTypes';
+import { collectTreePackageIds } from '../shared/lib/workKnowlageTree';
 import { updateDocumentInState } from './workspaceSessionActionTypes';
+
+const getDocumentAncestorChain = (state: WorkspaceState, documentId: string): string[] => {
+  const ancestorIds: string[] = [];
+  const documentsById = new Map(state.seed.documents.map((document) => [document.id, document]));
+  const foldersById = new Map(state.seed.folders.map((folder) => [folder.id, folder]));
+  let parentId = documentsById.get(documentId)?.folderId ?? null;
+
+  while (parentId) {
+    ancestorIds.push(parentId);
+
+    const parentFolder = foldersById.get(parentId);
+    if (parentFolder) {
+      parentId = parentFolder.parentId ?? null;
+      continue;
+    }
+
+    const parentDocument = documentsById.get(parentId);
+    parentId = parentDocument?.folderId ?? null;
+  }
+
+  return ancestorIds.reverse();
+};
 
 type WorkspaceContentActionsState = Pick<
   WorkspaceSessionActionsState,
   | 'createDocument'
   | 'createFolder'
   | 'moveFolder'
+  | 'moveFolderToSpace'
   | 'renameFolder'
   | 'renameDocument'
   | 'moveDocument'
+  | 'moveDocumentToSpace'
   | 'deleteDocument'
   | 'deleteFolder'
   | 'addTagToDocument'
@@ -106,6 +132,41 @@ export function useWorkspaceContentActions({
     [markPersistenceFeedback, reloadWorkspaceState, workspaceState],
   );
 
+  const moveFolderToSpace = useCallback(
+    async (folderId: string, targetSpaceId: string) => {
+      if (!workspaceState) {
+        return;
+      }
+
+      const moveToSpace = getWorkKnowlageApi().folders.moveToSpace;
+      if (!moveToSpace) {
+        throw new Error('当前环境不支持跨空间移动文件夹');
+      }
+
+      const packageIds = collectTreePackageIds(workspaceState.seed.folders, workspaceState.seed.documents, 'folder', folderId);
+      const packageContainerIds = new Set([...packageIds.folderIds, ...packageIds.documentIds]);
+      const activeDocumentMoved = packageIds.documentIds.includes(workspaceState.activeDocumentId);
+      const ensureExpandedFolderIds = activeDocumentMoved
+        ? getDocumentAncestorChain(workspaceState, workspaceState.activeDocumentId)
+          .filter((containerId) => packageContainerIds.has(containerId))
+        : [];
+
+      await moveToSpace(folderId, targetSpaceId);
+
+      await reloadWorkspaceState({
+        activeSpaceId: activeDocumentMoved ? targetSpaceId : workspaceState.activeSpaceId,
+        activeDocumentId: activeDocumentMoved ? workspaceState.activeDocumentId : workspaceState.activeDocumentId,
+        ensureExpandedFolderIds,
+        activeCollectionView: 'tree',
+      });
+      if (activeDocumentMoved) {
+        setActiveQuickNoteDate(null);
+      }
+      markPersistenceFeedback('移动文件夹到空间');
+    },
+    [markPersistenceFeedback, reloadWorkspaceState, setActiveQuickNoteDate, workspaceState],
+  );
+
   const renameFolder = useCallback(
     async (folderId: string, newName: string) => {
       await getWorkKnowlageApi().folders.rename(folderId, newName);
@@ -141,6 +202,44 @@ export function useWorkspaceContentActions({
       markPersistenceFeedback('移动文档');
     },
     [markPersistenceFeedback, reloadWorkspaceState],
+  );
+
+  const moveDocumentToSpace = useCallback(
+    async (documentId: string, targetSpaceId: string) => {
+      if (!workspaceState) {
+        return;
+      }
+
+      const moveToSpace = getWorkKnowlageApi().documents.moveToSpace;
+      if (!moveToSpace) {
+        throw new Error('当前环境不支持跨空间移动文档');
+      }
+
+      const packageIds = collectTreePackageIds(workspaceState.seed.folders, workspaceState.seed.documents, 'document', documentId);
+      const packageContainerIds = new Set([...packageIds.folderIds, ...packageIds.documentIds]);
+      const nextActiveDocumentId = packageIds.documentIds.includes(workspaceState.activeDocumentId)
+        ? workspaceState.activeDocumentId
+        : workspaceState.activeDocumentId;
+      const activeDocumentMoved = packageIds.documentIds.includes(workspaceState.activeDocumentId);
+      const ensureExpandedFolderIds = activeDocumentMoved
+        ? getDocumentAncestorChain(workspaceState, workspaceState.activeDocumentId)
+          .filter((containerId) => packageContainerIds.has(containerId))
+        : [];
+
+      await moveToSpace(documentId, targetSpaceId);
+
+      await reloadWorkspaceState({
+        activeSpaceId: activeDocumentMoved ? targetSpaceId : workspaceState.activeSpaceId,
+        activeDocumentId: nextActiveDocumentId,
+        ensureExpandedFolderIds,
+        activeCollectionView: 'tree',
+      });
+      if (activeDocumentMoved) {
+        setActiveQuickNoteDate(null);
+      }
+      markPersistenceFeedback('移动文档到空间');
+    },
+    [markPersistenceFeedback, reloadWorkspaceState, setActiveQuickNoteDate, workspaceState],
   );
 
   const deleteDocument = useCallback(
@@ -209,7 +308,7 @@ export function useWorkspaceContentActions({
 
       const nextTag = await getWorkKnowlageApi().tags.addToDocument(documentId, {
         label: normalizedLabel,
-        tone: currentDocument.tags.length === 0 ? 'primary' : 'neutral',
+        tone: 'primary',
       });
 
       updateDocumentInState(setWorkspaceState, documentId, (document) => ({
@@ -343,9 +442,11 @@ export function useWorkspaceContentActions({
     createDocument,
     createFolder,
     moveFolder,
+    moveFolderToSpace,
     renameFolder,
     renameDocument,
     moveDocument,
+    moveDocumentToSpace,
     deleteDocument,
     deleteFolder,
     addTagToDocument,

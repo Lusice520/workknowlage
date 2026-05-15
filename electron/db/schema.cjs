@@ -96,6 +96,29 @@ CREATE VIRTUAL TABLE IF NOT EXISTS workspace_search USING fts5(
   tokenize='unicode61'
 );
 
+CREATE TABLE IF NOT EXISTS workspace_block_search_entries (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  space_id      TEXT NOT NULL,
+  document_id   TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  block_id      TEXT NOT NULL,
+  block_type    TEXT NOT NULL DEFAULT 'unknown',
+  title         TEXT NOT NULL,
+  preview       TEXT NOT NULL DEFAULT '',
+  fallback_text TEXT NOT NULL DEFAULT '',
+  title_search  TEXT NOT NULL DEFAULT '',
+  body_search   TEXT NOT NULL DEFAULT '',
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(document_id, block_id)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS workspace_block_search USING fts5(
+  title_search,
+  body_search,
+  content='workspace_block_search_entries',
+  content_rowid='id',
+  tokenize='unicode61'
+);
+
 CREATE INDEX IF NOT EXISTS idx_folders_space ON folders(space_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
@@ -108,6 +131,8 @@ CREATE INDEX IF NOT EXISTS idx_backlinks_source ON backlinks(source_doc_id);
 CREATE INDEX IF NOT EXISTS idx_backlinks_target ON backlinks(target_doc_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_search_entries_space ON workspace_search_entries(space_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_search_entries_entity ON workspace_search_entries(entity_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_block_search_entries_space ON workspace_block_search_entries(space_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_block_search_entries_document ON workspace_block_search_entries(document_id);
 
 CREATE TRIGGER IF NOT EXISTS workspace_search_entries_ai AFTER INSERT ON workspace_search_entries BEGIN
   INSERT INTO workspace_search(rowid, title_search, body_search)
@@ -123,6 +148,23 @@ CREATE TRIGGER IF NOT EXISTS workspace_search_entries_au AFTER UPDATE ON workspa
   INSERT INTO workspace_search(workspace_search, rowid, title_search, body_search)
   VALUES('delete', old.id, old.title_search, old.body_search);
   INSERT INTO workspace_search(rowid, title_search, body_search)
+  VALUES (new.id, new.title_search, new.body_search);
+END;
+
+CREATE TRIGGER IF NOT EXISTS workspace_block_search_entries_ai AFTER INSERT ON workspace_block_search_entries BEGIN
+  INSERT INTO workspace_block_search(rowid, title_search, body_search)
+  VALUES (new.id, new.title_search, new.body_search);
+END;
+
+CREATE TRIGGER IF NOT EXISTS workspace_block_search_entries_ad AFTER DELETE ON workspace_block_search_entries BEGIN
+  INSERT INTO workspace_block_search(workspace_block_search, rowid, title_search, body_search)
+  VALUES('delete', old.id, old.title_search, old.body_search);
+END;
+
+CREATE TRIGGER IF NOT EXISTS workspace_block_search_entries_au AFTER UPDATE ON workspace_block_search_entries BEGIN
+  INSERT INTO workspace_block_search(workspace_block_search, rowid, title_search, body_search)
+  VALUES('delete', old.id, old.title_search, old.body_search);
+  INSERT INTO workspace_block_search(rowid, title_search, body_search)
   VALUES (new.id, new.title_search, new.body_search);
 END;
 `;

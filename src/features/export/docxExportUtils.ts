@@ -39,6 +39,30 @@ const DOCX_COLORS = {
   hyperlink: '2563EB',
 };
 
+const DOCX_TEXT_COLOR_TOKENS: Record<string, string> = {
+  gray: '9B9A97',
+  brown: '64473A',
+  red: 'E03E3E',
+  orange: 'D9730D',
+  yellow: 'DFAB01',
+  green: '2F7A5F',
+  blue: '2F6FDD',
+  purple: '6940A5',
+  pink: 'AD1A72',
+};
+
+const DOCX_BACKGROUND_COLOR_TOKENS: Record<string, string> = {
+  gray: 'EBECED',
+  brown: 'E9E5E3',
+  red: 'FBE4E4',
+  orange: 'F6E9D9',
+  yellow: 'FBF3DB',
+  green: 'DDEDEA',
+  blue: 'DDEBF1',
+  purple: 'EAE4F2',
+  pink: 'F4DFEB',
+};
+
 const ORDERED_LIST_REFERENCE = 'wk-ordered-list';
 const BULLET_LIST_REFERENCE = 'wk-bullet-list';
 const CHECKLIST_UNCHECKED_REFERENCE = 'wk-checklist-unchecked';
@@ -64,6 +88,33 @@ const withAutoLineSpacing = ({ before = 0, after = 120, line = 360 } = {}) => ({
   line,
   lineRule: LineRuleType.AUTO,
 });
+
+const resolveDocxColor = (value: unknown, tokenMap: Record<string, string>) => {
+  const raw = String(value || '').trim();
+  if (!raw || raw === 'default' || raw === 'transparent') {
+    return undefined;
+  }
+
+  const tokenColor = tokenMap[raw.toLowerCase()];
+  if (tokenColor) {
+    return tokenColor;
+  }
+
+  const hex = raw.startsWith('#') ? raw.slice(1) : raw;
+  if (/^[0-9a-f]{3}$/i.test(hex)) {
+    return hex.split('').map((part) => `${part}${part}`).join('').toUpperCase();
+  }
+
+  if (/^[0-9a-f]{6}$/i.test(hex)) {
+    return hex.toUpperCase();
+  }
+
+  if (/^[0-9a-f]{8}$/i.test(hex)) {
+    return hex.slice(0, 6).toUpperCase();
+  }
+
+  return undefined;
+};
 
 const buildHeadingSpacing = (level: number) => {
   if (level <= 1) return withAutoLineSpacing({ before: 120, after: 180, line: 320 });
@@ -272,13 +323,15 @@ const textRunFromInlineNode = (node: any, extra: Record<string, unknown> = {}) =
 
   if (node.type === 'text') {
     const styles = node.styles || {};
+    const textColor = resolveDocxColor(styles.textColor, DOCX_TEXT_COLOR_TOKENS)
+      || (extra.color as string | undefined);
     return new TextRun({
       text: String(node.text || ''),
       bold: Boolean(styles.bold),
       italics: Boolean(styles.italic),
       underline: styles.underline ? {} : undefined,
       strike: Boolean(styles.strike),
-      color: styles.textColor ? String(styles.textColor).replace('#', '') : (extra.color as string | undefined),
+      color: textColor,
       ...extra,
     });
   }
@@ -389,8 +442,8 @@ const buildTableRowsFromRichTable = (rawData: unknown) => {
       children: cells.map((cell: any) => {
         const cellText = extractInlineText(cell?.content || []);
         const isHeader = cell?.type === 'tableHeader' || rowIndex === 0;
-        const backgroundColor = String(cell?.attrs?.backgroundColor || '').trim();
-        const textColor = String(cell?.attrs?.textColor || '').trim().replace('#', '') || undefined;
+        const backgroundColor = resolveDocxColor(cell?.attrs?.backgroundColor, DOCX_BACKGROUND_COLOR_TOKENS);
+        const textColor = resolveDocxColor(cell?.attrs?.textColor, DOCX_TEXT_COLOR_TOKENS);
         const textAlign = String(cell?.attrs?.textAlign || '').trim();
         const shadingColor = isHeader ? DOCX_COLORS.tableHeader : backgroundColor;
         return new TableCell({

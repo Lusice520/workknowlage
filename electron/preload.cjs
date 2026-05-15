@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('workKnowlage', {
   meta: {
-    version: '0.1.0',
+    version: '0.4.0',
     runtime: 'electron-sqlite',
     persistence: 'disk',
     storageLabel: 'SQLite 本地数据库',
@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     create: (data)           => ipcRenderer.invoke('folders:create', data),
     rename: (id, name)       => ipcRenderer.invoke('folders:rename', id, name),
     move:   (id, newParent)  => ipcRenderer.invoke('folders:move', id, newParent),
+    moveToSpace: (id, targetSpaceId) => ipcRenderer.invoke('folders:moveToSpace', id, targetSpaceId),
     trash:  (id)             => ipcRenderer.invoke('folders:trash', id),
     delete: (id)             => ipcRenderer.invoke('folders:delete', id),
   },
@@ -34,6 +35,7 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     create:   (data)        => ipcRenderer.invoke('documents:create', data),
     update:   (id, data)    => ipcRenderer.invoke('documents:update', id, data),
     move:     (id, targetFolderId) => ipcRenderer.invoke('documents:move', id, targetFolderId),
+    moveToSpace: (id, targetSpaceId) => ipcRenderer.invoke('documents:moveToSpace', id, targetSpaceId),
     trash:    (id)          => ipcRenderer.invoke('documents:trash', id),
     delete:   (id)          => ipcRenderer.invoke('documents:delete', id),
   },
@@ -65,6 +67,7 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     createBackup: () => ipcRenderer.invoke('maintenance:createBackup'),
     restoreBackup: () => ipcRenderer.invoke('maintenance:restoreBackup'),
     rebuildSearchIndex: () => ipcRenderer.invoke('maintenance:rebuildSearchIndex'),
+    inspectDocumentContentHealth: () => ipcRenderer.invoke('maintenance:inspectDocumentContentHealth'),
     cleanupOrphanAttachments: () => ipcRenderer.invoke('maintenance:cleanupOrphanAttachments'),
   },
 

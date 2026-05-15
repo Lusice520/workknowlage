@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { Badge, BadgeGroup } from '../../../node_modules/@blocknote/mantine/src/badge/Badge.js';
 import { Button } from '../../../node_modules/@blocknote/mantine/src/menu/Button.js';
 import {
   Menu,
@@ -30,6 +32,12 @@ import { Toolbar } from '../../../node_modules/@blocknote/mantine/src/toolbar/To
 import { ToolbarButton } from '../../../node_modules/@blocknote/mantine/src/toolbar/ToolbarButton.js';
 import { ToolbarSelect } from '../../../node_modules/@blocknote/mantine/src/toolbar/ToolbarSelect.js';
 import { TextInput } from '../../../node_modules/@blocknote/mantine/src/form/TextInput.js';
+
+// Comments stay disabled in this app, but BlockNote 0.48 expects the slots to
+// exist on the component contract. Keep them as inert placeholders so we don't
+// pull the comments UI and its private dependencies back into the runtime.
+const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+const NullCommentsComponent = () => null;
 
 export const knowledgeBaseEditorComponents = {
   FormattingToolbar: {
@@ -71,8 +79,12 @@ export const knowledgeBaseEditorComponents = {
     ExtendButton,
   },
   Generic: {
+    Badge: {
+      Root: Badge,
+      Group: BadgeGroup,
+    },
     Form: {
-      Root: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
+      Root: Passthrough,
       TextInput,
     },
     Menu: {
@@ -95,4 +107,11 @@ export const knowledgeBaseEditorComponents = {
       Select: ToolbarSelect,
     },
   },
-} as any;
+  Comments: {
+    Comment: NullCommentsComponent,
+    Editor: NullCommentsComponent,
+    Card: Passthrough,
+    CardSection: Passthrough,
+    ExpandSectionsPrompt: NullCommentsComponent,
+  },
+};

@@ -15,9 +15,11 @@ export interface SidebarTreeProps {
   onCreateDocument: (folderId: string | null) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
   onMoveDocument: (documentId: string, targetFolderId: string | null) => Promise<void>;
+  onRequestMoveDocumentToSpace: (documentId: string, documentTitle: string) => void;
   onStartEditing: (id: string) => void;
   onCancelEditing: () => void;
   onDeleteDocument: (documentId: string) => Promise<void>;
@@ -43,9 +45,11 @@ export function SidebarTree({
   onCreateDocument,
   onCreateFolder,
   onMoveFolder,
+  onRequestMoveFolderToSpace,
   onRenameFolder,
   onRenameDocument,
   onMoveDocument,
+  onRequestMoveDocumentToSpace,
   onStartEditing,
   onCancelEditing,
   onDeleteDocument,
@@ -74,9 +78,11 @@ export function SidebarTree({
           onCreateDocument={onCreateDocument}
           onCreateFolder={onCreateFolder}
           onMoveFolder={onMoveFolder}
+          onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
           onRenameFolder={onRenameFolder}
           onRenameDocument={onRenameDocument}
           onMoveDocument={onMoveDocument}
+          onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
           onStartEditing={onStartEditing}
           onCancelEditing={onCancelEditing}
           onDeleteDocument={onDeleteDocument}
@@ -102,9 +108,11 @@ export function SidebarTree({
           onCreateDocument={onCreateDocument}
           onCreateFolder={onCreateFolder}
           onMoveFolder={onMoveFolder}
+          onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
           onRenameFolder={onRenameFolder}
           onRenameDocument={onRenameDocument}
           onMoveDocument={onMoveDocument}
+          onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
           onStartEditing={onStartEditing}
           onCancelEditing={onCancelEditing}
           onDeleteDocument={onDeleteDocument}

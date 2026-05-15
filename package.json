@@ -1,9 +1,12 @@
 {
   "name": "workknowlage",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "productName": "WorkKnowlage",
   "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently -k -n RENDERER,APP -c cyan,green \"npm:dev:renderer\" \"npm:dev:app\"",
     "dev:renderer": "vite --host 127.0.0.1 --port 5175 --strictPort",
@@ -20,13 +23,14 @@
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "lucide-react": "^0.575.0",
+    "mermaid": "^11.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@blocknote/core": "^0.47.3",
-    "@blocknote/mantine": "^0.47.3",
-    "@blocknote/react": "^0.47.3",
+    "@blocknote/core": "0.48.0",
+    "@blocknote/mantine": "0.48.0",
+    "@blocknote/react": "0.48.0",
     "@mantine/core": "^8.3.18",
     "@mantine/hooks": "^8.3.18",
     "@resvg/resvg-js": "^2.6.2",

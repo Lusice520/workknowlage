@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
-import { getWorkKnowlageApi } from '../../shared/lib/workKnowlageApi';
 import {
   buildCalendarWeeks,
   formatDateKey,
@@ -9,6 +8,7 @@ import {
   parseDateKey,
   startOfMonth,
 } from '../../shared/lib/quickNotes';
+import { listQuickNoteMonthEntries } from '../../shared/lib/quickNoteRecords';
 import type { QuickNoteMonthEntry, Space } from '../../shared/types/workspace';
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const;
@@ -48,10 +48,9 @@ export function SidebarQuickNotePanel({
       return;
     }
 
-    const api = getWorkKnowlageApi();
     let cancelled = false;
 
-    api.quickNotes.listMonth(monthKey)
+    listQuickNoteMonthEntries(monthKey)
       .then((entries) => {
         if (!cancelled) {
           setMonthEntries(entries);

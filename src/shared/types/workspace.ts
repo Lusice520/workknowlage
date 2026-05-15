@@ -50,11 +50,15 @@ export interface MentionDocumentCandidate {
 export interface DocumentNavigationTarget {
   documentId: string;
   blockId?: string;
+  fallbackText?: string;
+  highlightQuery?: string;
 }
 
 export interface DocumentFocusTarget {
   documentId: string;
   blockId: string;
+  fallbackText?: string;
+  highlightQuery?: string;
   requestKey: number;
 }
 

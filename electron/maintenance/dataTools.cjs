@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { getDatabase } = require('../db/index.cjs');
+const { getContentJsonStorageKind } = require('../db/documentContent.cjs');
 
 const BACKUP_MANIFEST_NAME = 'manifest.json';
 const BACKUP_FORMAT_VERSION = 1;
@@ -322,6 +323,90 @@ function cleanupOrphanAttachments({ uploadsRootDir }) {
   };
 }
 
+function inspectDocumentContentHealth() {
+  const db = getDatabase();
+  const documentRows = db.prepare('SELECT title, content_json FROM documents ORDER BY updated_at DESC, title COLLATE NOCASE').all();
+  const quickNoteRows = db.prepare('SELECT note_date, title, content_json FROM quick_notes ORDER BY updated_at DESC, note_date DESC').all();
+
+  const summarizeRows = (rows, getLabel) => rows.reduce((summary, row) => {
+    const kind = getContentJsonStorageKind(row.content_json);
+    summary.total += 1;
+
+    if (kind === 'legacy-sections') {
+      summary.legacy += 1;
+      if (summary.legacyExamples.length < 3) {
+        summary.legacyExamples.push(getLabel(row));
+      }
+    } else if (kind === 'blocks') {
+      summary.blocks += 1;
+    } else {
+      summary.empty += 1;
+      if (summary.emptyExamples.length < 3) {
+        summary.emptyExamples.push(getLabel(row));
+      }
+    }
+
+    return summary;
+  }, {
+    total: 0,
+    legacy: 0,
+    blocks: 0,
+    empty: 0,
+    legacyExamples: [],
+    emptyExamples: [],
+  });
+
+  const documentSummary = summarizeRows(documentRows, (row) => String(row.title || '无标题文稿').trim() || '无标题文稿');
+  const quickNoteSummary = summarizeRows(quickNoteRows, (row) => String(row.title || row.note_date || '未命名快记').trim() || '未命名快记');
+
+  const appendExamples = (label, examples) => {
+    if (!examples.length) {
+      return null;
+    }
+
+    return `${label}${examples.join('、')}`;
+  };
+
+  const details = [
+    ...documentSummary.legacyExamples.map((label) => ({
+      label,
+      detail: '旧格式文稿',
+      tone: 'warning',
+    })),
+    ...documentSummary.emptyExamples.map((label) => ({
+      label,
+      detail: '空内容文稿',
+      tone: 'warning',
+    })),
+    ...quickNoteSummary.legacyExamples.map((label) => ({
+      label,
+      detail: '旧格式快记',
+      tone: 'warning',
+    })),
+    ...quickNoteSummary.emptyExamples.map((label) => ({
+      label,
+      detail: '空内容快记',
+      tone: 'warning',
+    })),
+  ];
+
+  return {
+    success: true,
+    message: [
+      `文稿 ${documentSummary.total} 篇`,
+      `旧格式 ${documentSummary.legacy} 篇`,
+      `块格式 ${documentSummary.blocks} 篇`,
+      `空内容 ${documentSummary.empty} 篇`,
+      `快记旧格式 ${quickNoteSummary.legacy} 篇`,
+      appendExamples('旧格式示例：', documentSummary.legacyExamples),
+      appendExamples('空内容示例：', documentSummary.emptyExamples),
+      appendExamples('快记旧格式示例：', quickNoteSummary.legacyExamples),
+      appendExamples('快记空内容示例：', quickNoteSummary.emptyExamples),
+    ].filter(Boolean).join('；'),
+    details,
+  };
+}
+
 function listDirectorySize(dirPath) {
   if (!fs.existsSync(dirPath)) {
     return 0;
@@ -342,5 +427,6 @@ module.exports = {
   createBackupSnapshot,
   restoreBackupSnapshot,
   cleanupOrphanAttachments,
+  inspectDocumentContentHealth,
   readBackupManifest,
 };

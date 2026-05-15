@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getDocumentMentionItems } from './editorSchema';
-import { isEditorComposingInput, shouldTrapArrowLeftAfterRichTable } from './SharedBlockNoteSurface';
+import {
+  isEditorComposingInput,
+  shouldHandleClipboardFilePasteAsUpload,
+  shouldTrapArrowLeftAfterRichTable,
+} from './SharedBlockNoteSurface';
 
 test('treats IME composition as a bypass condition for custom editor shortcuts', () => {
   expect(
@@ -80,11 +84,52 @@ test('does not trap ArrowLeft when the paragraph after a rich table already has 
   ).toBe(false);
 });
 
+test('prefers text/html paste over image upload when clipboard also contains an Office preview image', () => {
+  const imageFile = new File(['image'], 'excel-preview.png', { type: 'image/png' });
+
+  expect(shouldHandleClipboardFilePasteAsUpload({
+    files: [imageFile],
+    dataTransfer: {
+      getData: (type: string) => {
+        if (type === 'text/html') return '<table><tr><td>单元格</td></tr></table>';
+        if (type === 'text/plain') return '单元格';
+        return '';
+      },
+    } as Pick<DataTransfer, 'getData'>,
+  })).toBe(false);
+});
+
+test('still uploads pure clipboard images when no text payload is present', () => {
+  const imageFile = new File(['image'], 'screenshot.png', { type: 'image/png' });
+
+  expect(shouldHandleClipboardFilePasteAsUpload({
+    files: [imageFile],
+    dataTransfer: {
+      getData: () => '',
+    } as Pick<DataTransfer, 'getData'>,
+  })).toBe(true);
+});
+
+test('routes RichTable-adjacent Backspace/Delete through the no-scroll deletion helper', () => {
+  const tableBehaviorPath = path.resolve(__dirname, 'sharedBlockNoteTableBehavior.ts');
+  const source = fs.readFileSync(tableBehaviorPath, 'utf8');
+
+  expect(source).toContain('handleRichTableAdjacentDeletionWithoutScroll');
+  expect(source).toContain("key: event.key");
+});
+
 test('restores the floating formatting toolbar controller after the isolation experiment', () => {
   const surfacePath = path.resolve(__dirname, 'SharedBlockNoteSurface.tsx');
   const source = fs.readFileSync(surfacePath, 'utf8');
 
   expect(source).toContain('<SelectionFormattingToolbarController');
+});
+
+test('mounts the BlockNote native table handles controller for standard tables', () => {
+  const surfacePath = path.resolve(__dirname, 'SharedBlockNoteSurface.tsx');
+  const source = fs.readFileSync(surfacePath, 'utf8');
+
+  expect(source).toContain('<TableHandlesController');
 });
 
 test('uses the local knowledge base editor view instead of the default BlockNote wrapper', () => {
@@ -100,6 +145,13 @@ test('registers an @ suggestion menu for document mentions', () => {
   const source = fs.readFileSync(surfacePath, 'utf8');
 
   expect(source).toContain('triggerCharacter="@"');
+});
+
+test('mounts an editor Mermaid preview hook for Mermaid code blocks', () => {
+  const surfacePath = path.resolve(__dirname, 'SharedBlockNoteSurface.tsx');
+  const source = fs.readFileSync(surfacePath, 'utf8');
+
+  expect(source).toContain('useSharedBlockNoteMermaidPreview');
 });
 
 test('filters mention items by title and path, ranks title hits higher, and limits the result count', () => {

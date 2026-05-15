@@ -3,6 +3,7 @@ const path = require('node:path');
 const { app } = require('electron');
 const SCHEMA_SQL = require('./schema.cjs');
 const { seedDatabase } = require('./seed.cjs');
+const { deriveWordCount, migrateLegacyContentJsonToBlocks } = require('./documentContent.cjs');
 
 /** @type {import('better-sqlite3').Database | null} */
 let db = null;
@@ -206,6 +207,44 @@ function migrateBacklinkSourceBlockId(database) {
   database.exec('ALTER TABLE backlinks ADD COLUMN source_block_id TEXT');
 }
 
+function migrateLegacySectionContentJson(database) {
+  if (!tableExists(database, 'documents')) {
+    return;
+  }
+
+  const rows = database.prepare('SELECT id, content_json FROM documents').all();
+  if (rows.length === 0) {
+    return;
+  }
+
+  const updateDocumentContent = database.prepare(
+    'UPDATE documents SET content_json = ?, word_count = ? WHERE id = ?'
+  );
+
+  let migratedCount = 0;
+  const migrate = database.transaction(() => {
+    rows.forEach((row) => {
+      const nextContentJson = migrateLegacyContentJsonToBlocks(row.content_json);
+      if (nextContentJson === row.content_json) {
+        return;
+      }
+
+      updateDocumentContent.run(
+        nextContentJson,
+        deriveWordCount(nextContentJson),
+        row.id,
+      );
+      migratedCount += 1;
+    });
+  });
+
+  migrate();
+
+  if (migratedCount > 0) {
+    console.log(`[DB] Migrated ${migratedCount} legacy section-like documents to block content.`);
+  }
+}
+
 function getUserDataDir() {
   const overriddenUserDataDir = process.env.WORKKNOWLAGE_USER_DATA_DIR;
 
@@ -246,6 +285,8 @@ function initDatabase() {
     seedDatabase(db);
     console.log('[DB] Seed complete.');
   }
+
+  migrateLegacySectionContentJson(db);
 
   console.log('[DB] Database ready.');
   return db;

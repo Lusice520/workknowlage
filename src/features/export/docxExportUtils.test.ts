@@ -50,6 +50,65 @@ describe('docxExportUtils', () => {
     expect(bytes[1]).toBe(0x4b);
   });
 
+  test('normalizes editor color tokens before writing docx colors', async () => {
+    const bytes = await buildDocxBytesFromBlocks([
+      {
+        id: 'paragraph-1',
+        type: 'paragraph',
+        props: {},
+        content: [{ type: 'text', text: '红色文本', styles: { textColor: 'red' } }],
+        children: [],
+      },
+      {
+        id: 'table-1',
+        type: 'richTable',
+        props: {
+          data: JSON.stringify({
+            content: [
+              {
+                type: 'table',
+                content: [
+                  {
+                    type: 'tableRow',
+                    content: [
+                      {
+                        type: 'tableHeader',
+                        content: [{ type: 'paragraph', content: [{ type: 'text', text: '表头' }] }],
+                      },
+                    ],
+                  },
+                  {
+                    type: 'tableRow',
+                    content: [
+                      {
+                        type: 'tableCell',
+                        attrs: { textColor: 'blue', backgroundColor: 'yellow' },
+                        content: [{ type: 'paragraph', content: [{ type: 'text', text: '表格颜色' }] }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        },
+        children: [],
+      },
+    ], {
+      title: '颜色导出',
+    });
+
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+
+    expect(documentXml).toBeTruthy();
+    expect(documentXml).toContain('w:val="E03E3E"');
+    expect(documentXml).toContain('w:val="2F6FDD"');
+    expect(documentXml).toContain('w:fill="FBF3DB"');
+    expect(documentXml).not.toContain('w:val="red"');
+    expect(documentXml).not.toContain('w:fill="yellow"');
+  });
+
   test('does not force black shading onto rich table body cells without background colors', async () => {
     const bytes = await buildDocxBytesFromBlocks([
       {

@@ -65,6 +65,53 @@ test('confirms before restoring a backup from settings', async () => {
   expect(restoreBackup).not.toHaveBeenCalled();
 });
 
+test('runs document content health diagnostics from settings', async () => {
+  const api = createFallbackDesktopApi();
+  const inspectDocumentContentHealth = vi.fn().mockResolvedValue({
+    success: true,
+    message: '文稿 12 篇；旧格式 1 篇；块格式 11 篇；空内容 0 篇；快记旧格式 1 篇；旧格式示例：总结；快记旧格式示例：2026-04-21',
+    details: [
+      { label: '总结', detail: '旧格式文稿', tone: 'warning' },
+      { label: '2026-04-21', detail: '旧格式快记', tone: 'warning' },
+    ],
+  });
+
+  window.workKnowlage = {
+    ...api,
+    maintenance: {
+      openDataDirectory: vi.fn().mockResolvedValue({ success: true, message: '已打开数据目录' }),
+      createBackup: vi.fn().mockResolvedValue({ success: true, message: '备份已创建' }),
+      restoreBackup: vi.fn().mockResolvedValue({ success: true, message: '备份已恢复' }),
+      rebuildSearchIndex: vi.fn().mockResolvedValue({ success: true, message: '搜索索引已重建' }),
+      inspectDocumentContentHealth,
+      cleanupOrphanAttachments: vi.fn().mockResolvedValue({
+        success: true,
+        message: '已清理 1 个孤儿附件',
+      }),
+    },
+  } as any;
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByTestId('left-sidebar')).toBeInTheDocument();
+  });
+
+  await clickAsync(screen.getByTestId('space-switcher-trigger'));
+  await clickAsync(screen.getByRole('button', { name: '设置' }));
+  await clickAsync(screen.getByRole('button', { name: '检查文稿格式' }));
+
+  await waitFor(() => {
+    expect(inspectDocumentContentHealth).toHaveBeenCalledTimes(1);
+  });
+
+  expect(screen.getByText(/旧格式示例：总结/)).toBeInTheDocument();
+  expect(screen.getByText(/快记旧格式示例：2026-04-21/)).toBeInTheDocument();
+  expect(screen.getByText('体检明细')).toBeInTheDocument();
+  expect(screen.getByText('旧格式文稿')).toBeInTheDocument();
+  expect(screen.getByText('旧格式快记')).toBeInTheDocument();
+});
+
 test('shows 根目录 in the breadcrumb for a root-level document', async () => {
   const api = createFallbackDesktopApi();
   const rootDocument = {
@@ -146,6 +193,27 @@ test('adds and removes tags for the active document', async () => {
   await waitFor(() => {
     expect(screen.queryByText('#测试标签')).not.toBeInTheDocument();
   });
+});
+
+test('renders the sidebar overview and knowledge association card for the active document', async () => {
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByText('文稿概览')).toBeInTheDocument();
+  });
+
+  expect(screen.getByRole('button', { name: '属性' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^Wiki/ })).toBeInTheDocument();
+  expect(screen.queryByText('知识关联')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /^Wiki/ }));
+
+  expect(screen.getByText('知识关联')).toBeInTheDocument();
+  expect(screen.getByText('显式引用')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
+  expect(screen.getByText('原文线索')).toBeInTheDocument();
+  expect(screen.queryByText('上下文')).not.toBeInTheDocument();
+  expect(screen.queryByText('关联')).not.toBeInTheDocument();
 });
 
 test('clears workspace search after switching spaces', async () => {
@@ -247,6 +315,85 @@ test('clears workspace search after deleting the current space', async () => {
 
   expect((screen.getByLabelText('搜索工作区') as HTMLInputElement).value).toBe('');
   expect(screen.queryByTestId('workspace-search-panel')).not.toBeInTheDocument();
+});
+
+test('shows loading state and success toast after moving a document to another space', async () => {
+  const api = createFallbackDesktopApi();
+  const targetSpace = await api.spaces.create({ name: '第二空间', label: 'WORKSPACE' });
+  let resolveMove: (() => void) | null = null;
+  const moveToSpaceSpy = vi.fn(() => new Promise<void>((resolve) => {
+    resolveMove = resolve;
+  }));
+
+  window.workKnowlage = {
+    ...api,
+    documents: {
+      ...api.documents,
+      moveToSpace: moveToSpaceSpy,
+    },
+  } as any;
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: '创意草案' })).toBeInTheDocument();
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  openSidebarMenu(sidebar, '创意草案 更多操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '移动到空间' }));
+
+  const dialog = await screen.findByRole('dialog', { name: '移动到空间' });
+  fireEvent.click(within(dialog).getByRole('button', { name: new RegExp(targetSpace.name) }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认移动' }));
+
+  await waitFor(() => {
+    expect(within(dialog).getByRole('button', { name: '移动中...' })).toBeDisabled();
+  });
+
+  await act(async () => {
+    resolveMove?.();
+  });
+
+  await waitFor(() => {
+    expect(moveToSpaceSpy).toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(`已移动到「${targetSpace.name}」`);
+  });
+});
+
+test('shows error toast and keeps the dialog open when moving to another space fails', async () => {
+  const api = createFallbackDesktopApi();
+  const targetSpace = await api.spaces.create({ name: '第二空间', label: 'WORKSPACE' });
+  const moveToSpaceSpy = vi.fn().mockRejectedValue(new Error('网络异常'));
+
+  window.workKnowlage = {
+    ...api,
+    documents: {
+      ...api.documents,
+      moveToSpace: moveToSpaceSpy,
+    },
+  } as any;
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: '创意草案' })).toBeInTheDocument();
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  openSidebarMenu(sidebar, '创意草案 更多操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '移动到空间' }));
+
+  const dialog = await screen.findByRole('dialog', { name: '移动到空间' });
+  fireEvent.click(within(dialog).getByRole('button', { name: new RegExp(targetSpace.name) }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认移动' }));
+
+  await waitFor(() => {
+    expect(screen.getByRole('alert')).toHaveTextContent('移动失败：网络异常');
+  });
+
+  expect(screen.getByRole('dialog', { name: '移动到空间' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: '确认移动' })).toBeEnabled();
 });
 
 test('renames and deletes the current workspace from the switcher', async () => {

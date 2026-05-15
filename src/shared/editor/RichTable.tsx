@@ -1,15 +1,17 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { createReactBlockSpec } from './blocknoteReactNoComments';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Mark, mergeAttributes } from '@tiptap/core';
 import { Selection, TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
+import Code from '@tiptap/extension-code';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
+import { TaskItem } from '@tiptap/extension-list/task-item';
+import { TaskList } from '@tiptap/extension-list/task-list';
 import {
   CellSelection,
   nextCell,
@@ -18,16 +20,25 @@ import {
   addColumn as pmInsertColumn,
   addRow as pmInsertRow,
 } from 'prosemirror-tables';
-import { Bold, Italic, Underline as UnderlineIcon, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Palette, Plus, Check, Ellipsis, EllipsisVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { buildNormalizedRichTableColumnWidthTransaction } from './richTableColumnWidths';
 import { applyClipboardTableToDoc, htmlTableHasMergedCells, parseClipboardTable, tableDocHasMergedCells } from './richTablePasteUtils';
-import { buildDefaultRichTableDoc, getRichTableColumnCount, getRichTableTrackMinWidth } from './richTableLayout';
 import {
-  getRichTableEdgeHandleViewportPosition,
+  buildDefaultRichTableDoc,
+  getRichTableColumnCount,
+  getRichTableTableMinWidth,
+  getRichTableTrackMinWidth,
+} from './richTableLayout';
+import {
   getRichTableGripViewportPosition,
-  getRichTableToolbarViewportPosition,
 } from './richTableToolbarPortal';
-import { shouldShowRichTableToolbar } from './richTableUiState';
+import { useRichTableCommands } from './useRichTableCommands';
+import { useRichTableOverlayModel } from './useRichTableOverlayModel';
+import { RichTableOverlay } from './RichTableOverlay';
 import './RichTable.css';
+
+const RichTableInlineCode = Code.extend({
+  excludes: '',
+});
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -69,6 +80,10 @@ const applyTextMarks = (rawText: string, marks: any[] = []) => {
       html = `<s>${html}</s>`;
       continue;
     }
+    if (type === 'code') {
+      html = `<code>${html}</code>`;
+      continue;
+    }
     if (type === 'rtTextColor') {
       const color = sanitizeCssValue(mark?.attrs?.color);
       html = color ? `<span style="color:${color}">${html}</span>` : html;
@@ -102,6 +117,11 @@ const renderTableRichNode = (node: any) => {
   if (node.type === 'bulletList') return `<ul>${children}</ul>`;
   if (node.type === 'orderedList') return `<ol>${children}</ol>`;
   if (node.type === 'listItem') return `<li>${children || '<p><br /></p>'}</li>`;
+  if (node.type === 'taskList') return `<ul data-type="taskList">${children}</ul>`;
+  if (node.type === 'taskItem') {
+    const checked = node?.attrs?.checked ? ' checked' : '';
+    return `<li data-type="taskItem" data-checked="${node?.attrs?.checked ? 'true' : 'false'}"><label><input type="checkbox"${checked} disabled /><span></span></label><div>${children || '<p><br /></p>'}</div></li>`;
+  }
 
   return children;
 };
@@ -268,6 +288,39 @@ const buildRichTableStaticHtml = (rawData: string) => {
 
 const normalizeColorValue = (value: any) => (value ? String(value).trim().toLowerCase() : null);
 
+const restoreElementScrollPosition = (element: HTMLElement | null | undefined, top: number, left: number) => {
+  if (!element) return;
+  if (element.scrollTop !== top) {
+    element.scrollTop = top;
+  }
+  if (element.scrollLeft !== left) {
+    element.scrollLeft = left;
+  }
+};
+
+const preserveRichTableSurfaceScroll = (
+  scrollSurface: HTMLElement | null | undefined,
+  mutate: () => void,
+) => {
+  if (!scrollSurface) {
+    mutate();
+    return;
+  }
+
+  const top = scrollSurface.scrollTop;
+  const left = scrollSurface.scrollLeft;
+  const restore = () => restoreElementScrollPosition(scrollSurface, top, left);
+
+  mutate();
+  restore();
+
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => {
+      restore();
+    });
+  }
+};
+
 const TextColorMark = Mark.create({
   name: 'rtTextColor',
   addAttributes() {
@@ -384,66 +437,74 @@ const withCellColors = (BaseExtension: any) =>
 
 const ColoredTableCell = withCellColors(TableCell);
 const ColoredTableHeader = withCellColors(TableHeader);
+const RICH_TABLE_SAVE_DEBOUNCE_MS = 200;
 
-const COLOR_OPTIONS = [
-  { label: '默认', value: null },
-  { label: '灰色', value: '#6b7280' },
-  { label: '棕色', value: '#7c5a46' },
-  { label: '红色', value: '#dc2626' },
-  { label: '橙色', value: '#ea580c' },
-  { label: '黄色', value: '#ca8a04' },
-  { label: '绿色', value: '#16a34a' },
-  { label: '蓝色', value: '#2563eb' },
-  { label: '紫色', value: '#7c3aed' },
-  { label: '粉色', value: '#db2777' },
-];
+export const flushPendingRichTablePersist = ({
+  blockId,
+  bnEditor,
+  isComposing,
+  lastSerializedRef,
+  pendingSerializedRef,
+  scrollSurface,
+}: {
+  blockId: string;
+  bnEditor: { updateBlock: (blockId: string, nextBlock: any) => void };
+  isComposing: () => boolean;
+  lastSerializedRef: { current: string };
+  pendingSerializedRef: { current: string | null };
+  scrollSurface?: HTMLElement | null;
+}) => {
+  const nextSerialized = pendingSerializedRef.current;
+  if (!nextSerialized || nextSerialized === lastSerializedRef.current) return false;
+  if (isComposing()) return false;
 
-const BG_OPTIONS = [
-  { label: '默认', value: null },
-  { label: '灰色', value: '#f3f4f6' },
-  { label: '棕色', value: '#f5ece6' },
-  { label: '红色', value: '#fee2e2' },
-  { label: '橙色', value: '#ffedd5' },
-  { label: '黄色', value: '#fef9c3' },
-  { label: '绿色', value: '#dcfce7' },
-  { label: '蓝色', value: '#dbeafe' },
-  { label: '紫色', value: '#ede9fe' },
-  { label: '粉色', value: '#fce7f3' },
+  preserveRichTableSurfaceScroll(scrollSurface, () => {
+    bnEditor.updateBlock(blockId, {
+      type: 'richTable',
+      props: { data: nextSerialized },
+    });
+  });
+  lastSerializedRef.current = nextSerialized;
+  pendingSerializedRef.current = null;
+  return true;
+};
+
+export const createRichTableEditorExtensions = () => [
+  StarterKit.configure({
+    heading: false,
+    code: false,
+    codeBlock: false,
+    blockquote: false,
+    horizontalRule: false,
+  }),
+  RichTableInlineCode,
+  TaskList,
+  TaskItem,
+  TextColorMark,
+  TextBackgroundMark,
+  Table.configure({ resizable: true }),
+  TableRow,
+  ColoredTableHeader,
+  ColoredTableCell,
 ];
 
 const GRIP_ANCHOR_OFFSET = 9;
-const GRIP_MENU_OFFSET = 26;
-const EDGE_PLUS_ICON_SIZE = 14;
-const GRIP_ICON_SIZE = 13;
-const FLOATING_GAP = 8;
-
-const ToolbarButton = ({ onClick, disabled, active, icon, title }: any) => (
-  <button
-    type="button"
-    className={`rt-icon-btn ${active ? 'active' : ''}`}
-    onMouseDown={(e) => e.preventDefault()}
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    contentEditable={false}
-  >
-    {icon}
-  </button>
-);
 
 const RichTableEditor = ({ block, editor: bnEditor }: any) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const hoveredCellRef = useRef<any>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSerializedRef = useRef<string | null>(null);
+  const tiptapEditorRef = useRef<any>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const toolbarPortalRef = useRef<HTMLDivElement | null>(null);
-  const floatingControlsPortalRef = useRef<HTMLDivElement | null>(null);
-  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const deferredCommandCleanupRef = useRef(new Set<() => void>());
+  const toolbarPortalRef = useRef<HTMLDivElement>(null);
+  const floatingControlsPortalRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const lastSerializedRef = useRef(block.props.data || '');
   const initialContent = parseDoc(block.props.data);
   const [hint, setHint] = useState('');
   const [showUi, setShowUi] = useState(false);
-  const [showToolbar, setShowToolbar] = useState(false);
   const [isToolbarHovered, setIsToolbarHovered] = useState(false);
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
   const [openColorMenu, setOpenColorMenu] = useState(false);
@@ -451,30 +512,54 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
   const [openColMenu, setOpenColMenu] = useState(false);
   const [rowGripPos, setRowGripPos] = useState<any>(null);
   const [colGripPos, setColGripPos] = useState<any>(null);
+  const [colTopAddButtonPos, setColTopAddButtonPos] = useState<any>(null);
   const [tableFrame, setTableFrame] = useState<any>(null);
   const [tableViewportFrame, setTableViewportFrame] = useState<any>(null);
-  const [toolbarViewportPosition, setToolbarViewportPosition] = useState<{ top: number; left: number } | null>(null);
   const [isTableHovered, setIsTableHovered] = useState(false);
   const [isEdgeHandleHovered, setIsEdgeHandleHovered] = useState(false);
   const [tableColumnCount, setTableColumnCount] = useState(() => getRichTableColumnCount(initialContent));
 
+  const registerDeferredCommandCleanup = useCallback((cleanup: () => void) => {
+    deferredCommandCleanupRef.current.add(cleanup);
+  }, []);
+
+  useEffect(
+    () => () => {
+      deferredCommandCleanupRef.current.forEach((cleanup) => cleanup());
+      deferredCommandCleanupRef.current.clear();
+    },
+    [],
+  );
+
+  const flushPendingPersist = useCallback(() => {
+    return flushPendingRichTablePersist({
+      blockId: block.id,
+      bnEditor,
+      isComposing: () => Boolean(tiptapEditorRef.current?.view?.composing),
+      lastSerializedRef,
+      pendingSerializedRef,
+      scrollSurface: containerRef.current?.closest('.shared-blocknote-surface') as HTMLElement | null,
+    });
+  }, [block.id, bnEditor]);
+
+  const schedulePendingPersist = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      flushPendingPersist();
+    }, RICH_TABLE_SAVE_DEBOUNCE_MS);
+  }, [flushPendingPersist]);
+
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit.configure({
-          heading: false,
-          codeBlock: false,
-          blockquote: false,
-          horizontalRule: false,
-        }),
-        TextColorMark,
-        TextBackgroundMark,
-        Table.configure({ resizable: true }),
-        TableRow,
-        ColoredTableHeader,
-        ColoredTableCell,
-      ],
+      extensions: createRichTableEditorExtensions(),
       content: initialContent,
+      onCreate: ({ editor: tiptapEditor }: any) => {
+        tiptapEditorRef.current = tiptapEditor;
+      },
+      onDestroy: () => {
+        tiptapEditorRef.current = null;
+      },
       editorProps: {
         attributes: {
           class: 'rt-editor',
@@ -482,21 +567,16 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
         handleKeyDown: (view, event) => handleRichTableArrowKeyDown(view, event),
       },
       onUpdate: ({ editor: tiptapEditor }: any) => {
+        tiptapEditorRef.current = tiptapEditor;
         const nextDoc = tiptapEditor.getJSON();
         const nextColumnCount = getRichTableColumnCount(nextDoc);
         setTableColumnCount((current: number) => (current === nextColumnCount ? current : nextColumnCount));
 
         const nextSerialized = JSON.stringify(nextDoc);
         if (nextSerialized === lastSerializedRef.current) return;
-
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => {
-          bnEditor.updateBlock(block.id, {
-            type: 'richTable',
-            props: { data: nextSerialized },
-          });
-          lastSerializedRef.current = nextSerialized;
-        }, 200);
+        pendingSerializedRef.current = nextSerialized;
+        if (tiptapEditor.view.composing) return;
+        schedulePendingPersist();
       },
     },
     [block.id]
@@ -558,6 +638,14 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     run(
       () => chainTableFocus()?.setCellAttribute('textAlign', value).run() ?? false,
       '请先将光标放在表格单元格内'
+    );
+  };
+
+  const toggleInlineCode = () => {
+    if (!editor) return;
+    run(
+      () => chainTableFocus()?.toggleCode().run() ?? false,
+      '请先选中文本或将光标放在文本内'
     );
   };
 
@@ -729,6 +817,28 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     if (!editor) return;
     const ok = runTableAction(action, failHint);
     if (!ok) return;
+    const { state, dispatch } = editor.view;
+    let tableNode: any = null;
+    let tableStart = -1;
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === 'table') {
+        tableNode = node;
+        tableStart = pos;
+        return false;
+      }
+
+      return undefined;
+    });
+    if (tableNode && tableStart >= 0) {
+      const normalizedWidthsTr = buildNormalizedRichTableColumnWidthTransaction({
+        state,
+        table: tableNode,
+        tableStart,
+      });
+      if (normalizedWidthsTr.docChanged) {
+        dispatch(normalizedWidthsTr);
+      }
+    }
     window.requestAnimationFrame(() => {
       updateTableGripPositions(hoveredCellRef.current || undefined);
       collapseCellSelectionToCursor();
@@ -742,18 +852,18 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     if (!containerRef.current) {
       setRowGripPos(null);
       setColGripPos(null);
+      setColTopAddButtonPos(null);
       setTableFrame(null);
       setTableViewportFrame(null);
-      setToolbarViewportPosition(null);
       return;
     }
     const shell = containerRef.current.querySelector('.rt-editor-shell');
     if (!shell) {
       setRowGripPos(null);
       setColGripPos(null);
+      setColTopAddButtonPos(null);
       setTableFrame(null);
       setTableViewportFrame(null);
-      setToolbarViewportPosition(null);
       return;
     }
     const findSelectionCell = () => {
@@ -776,9 +886,9 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     if (!activeCell) {
       setRowGripPos(null);
       setColGripPos(null);
+      setColTopAddButtonPos(null);
       setTableFrame(null);
       setTableViewportFrame(null);
-      setToolbarViewportPosition(null);
       return;
     }
     const row = activeCell.closest('tr');
@@ -786,9 +896,9 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     if (!row || !table) {
       setRowGripPos(null);
       setColGripPos(null);
+      setColTopAddButtonPos(null);
       setTableFrame(null);
       setTableViewportFrame(null);
-      setToolbarViewportPosition(null);
       return;
     }
 
@@ -826,6 +936,10 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
         viewportRect,
       })
     );
+    setColTopAddButtonPos({
+      top: tableRect.top - 12,
+      left: cellRect.left + cellRect.width,
+    });
     setTableFrame({
       top: tableRect.top - shellRect.top,
       left: tableRect.left - shellRect.left,
@@ -838,26 +952,6 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
       width: tableRect.width,
       height: tableRect.height,
     });
-
-    if (typeof window !== 'undefined' && toolbarRef.current) {
-      setToolbarViewportPosition(
-        getRichTableToolbarViewportPosition({
-          tableRect: {
-            top: tableRect.top,
-            left: tableRect.left,
-            width: tableRect.width,
-          },
-          toolbarRect: {
-            width: toolbarRef.current.offsetWidth,
-            height: toolbarRef.current.offsetHeight,
-          },
-          viewportRect: {
-            width: window.innerWidth,
-            height: window.innerHeight,
-          },
-        })
-      );
-    }
   }, [editor]);
 
   useEffect(() => {
@@ -869,31 +963,14 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     if (!editor) return;
     const refreshUi = () => {
       const inTable = editor.isEditable && editor.isActive('table');
-      const isFocused = editor.isFocused;
-      const selection = editor.state.selection;
-      const hasActiveSelection = !!selection && !selection.empty;
-      const hasCollapsedCellCursor = !!selection?.empty
-        && (editor.isActive('tableCell') || editor.isActive('tableHeader'));
-      setShowToolbar(shouldShowRichTableToolbar({
-        hasActiveSelection,
-        hasCollapsedCellCursor,
-        isEditable: editor.isEditable,
-        isFocused,
-        isTableActive: inTable,
-        isTableHovered,
-        isToolbarHovered,
-        openColorMenu,
-        openRowMenu,
-        openColMenu,
-      }));
       setShowUi(inTable);
       if (!inTable) {
         closeInlineMenus();
         setRowGripPos(null);
         setColGripPos(null);
+        setColTopAddButtonPos(null);
         setTableFrame(null);
         setTableViewportFrame(null);
-        setToolbarViewportPosition(null);
         setIsTableHovered(false);
         setIsEdgeHandleHovered(false);
         setIsToolbarHovered(false);
@@ -914,13 +991,10 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
       editor.off('blur', refreshUi);
       editor.off('transaction', refreshUi);
     };
-  }, [closeInlineMenus, editor, isTableHovered, isToolbarHovered, openColorMenu, openRowMenu, openColMenu, updateTableGripPositions]);
+  }, [closeInlineMenus, editor, updateTableGripPositions]);
 
   useEffect(() => {
-    if (!showUi) {
-      setToolbarViewportPosition(null);
-      return undefined;
-    }
+    if (!showUi) return undefined;
 
     const frameId = window.requestAnimationFrame(() => {
       updateTableGripPositions(hoveredCellRef.current || undefined);
@@ -940,13 +1014,36 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
       window.cancelAnimationFrame(frameId);
       observer.disconnect();
     };
-  }, [isToolbarExpanded, showToolbar, showUi, updateTableGripPositions]);
+  }, [isToolbarExpanded, showUi, updateTableGripPositions]);
 
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!editor?.view?.dom) return undefined;
+
+    const dom = editor.view.dom;
+    const handleCompositionStart = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+    const handleCompositionEnd = () => {
+      if (!pendingSerializedRef.current || pendingSerializedRef.current === lastSerializedRef.current) return;
+      schedulePendingPersist();
+    };
+
+    dom.addEventListener('compositionstart', handleCompositionStart);
+    dom.addEventListener('compositionend', handleCompositionEnd);
+    return () => {
+      dom.removeEventListener('compositionstart', handleCompositionStart);
+      dom.removeEventListener('compositionend', handleCompositionEnd);
+    };
+  }, [editor, schedulePendingPersist]);
 
   useEffect(() => {
     if (!editor?.view?.dom) return undefined;
@@ -1137,288 +1234,99 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
 
   const activeTextColor = getActiveTextColor();
   const activeCellBackground = getActiveCellBackground();
-  const shouldShowEdgeHandles = showUi && !!tableFrame && (isTableHovered || isEdgeHandleHovered || openRowMenu || openColMenu);
-  const shouldShowTableGrips = showUi && (isTableHovered || isEdgeHandleHovered || openRowMenu || openColMenu);
+  const tableMinWidth = getRichTableTableMinWidth(tableColumnCount);
   const trackMinWidth = getRichTableTrackMinWidth(tableColumnCount);
-  const colEdgeHandlePosition = tableViewportFrame
-    ? getRichTableEdgeHandleViewportPosition({
-        axis: 'col',
-        tableRect: tableViewportFrame,
-      })
-    : null;
-  const rowEdgeHandlePosition = tableViewportFrame
-    ? getRichTableEdgeHandleViewportPosition({
-        axis: 'row',
-        tableRect: tableViewportFrame,
-      })
-    : null;
 
-  // Compute the editor's visible clip region from the scroll shell
-  const scrollShellEl = containerRef.current?.querySelector('.rt-scroll-shell');
-  const editorClip = scrollShellEl?.getBoundingClientRect() ?? null;
-
-  // Clamp add-col handle: hide if its position exceeds the editor's right edge
-  const colEdgeInBounds = colEdgeHandlePosition && editorClip
-    ? colEdgeHandlePosition.left <= editorClip.right + 5
-    : true;
-
-  // Clamp add-row handle: restrict width and center to stay within editor bounds
-  const clampedRowEdge = (() => {
-    if (!rowEdgeHandlePosition || !editorClip) return rowEdgeHandlePosition;
-    const halfW = rowEdgeHandlePosition.width! / 2;
-    const rawLeft = rowEdgeHandlePosition.left - halfW;
-    const rawRight = rowEdgeHandlePosition.left + halfW;
-    if (rawRight <= editorClip.right + 5 && rawLeft >= editorClip.left - 5) return rowEdgeHandlePosition;
-    const visLeft = Math.max(rawLeft, editorClip.left);
-    const visRight = Math.min(rawRight, editorClip.right);
-    const w = Math.max(visRight - visLeft, 80);
-    return { ...rowEdgeHandlePosition, width: w, left: visLeft + w / 2 };
-  })();
-
-  // Clamp grip positions to editor bounds
-  const clampedRowGripPos = (() => {
-    if (!rowGripPos || !editorClip) return rowGripPos;
-    if (rowGripPos.left < editorClip.left - 20 || rowGripPos.left > editorClip.right + 5) return null;
-    return rowGripPos;
-  })();
-  const clampedColGripPos = (() => {
-    if (!colGripPos || !editorClip) return colGripPos;
-    if (colGripPos.left < editorClip.left - 5 || colGripPos.left > editorClip.right + 5) return null;
-    return colGripPos;
-  })();
-  const toolbarPortal = typeof document !== 'undefined' && showUi
-    ? createPortal(
-        <div
-          ref={toolbarPortalRef}
-          className="rt-top-toolbar-portal"
-          style={{
-            top: `${toolbarViewportPosition?.top ?? 0}px`,
-            left: `${toolbarViewportPosition?.left ?? 0}px`,
-            visibility: toolbarViewportPosition ? 'visible' : 'hidden',
-          }}
-          contentEditable={false}
-        >
-          <div
-            ref={toolbarRef}
-            className={`rt-top-toolbar ${showToolbar ? 'is-visible' : 'is-hidden'}`}
-            contentEditable={false}
-            onMouseDown={(e) => e.preventDefault()}
-            onMouseEnter={() => setIsToolbarHovered(true)}
-            onMouseLeave={() => setIsToolbarHovered(false)}
-          >
-            <ToolbarButton
-              title={isToolbarExpanded ? '收起工具栏' : '展开工具栏'}
-              icon={isToolbarExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-              onClick={() => setIsToolbarExpanded((value) => !value)}
-            />
-            {isToolbarExpanded ? (
-              <>
-                <span className="rt-divider" />
-                <ToolbarButton title="左对齐" icon={<AlignLeft size={14} />} onClick={() => applyCellAlign('left')} />
-                <ToolbarButton title="居中" icon={<AlignCenter size={14} />} onClick={() => applyCellAlign('center')} />
-                <ToolbarButton title="右对齐" icon={<AlignRight size={14} />} onClick={() => applyCellAlign('right')} />
-                <span className="rt-divider" />
-              </>
-            ) : null}
-            <div className="rt-color-wrap" contentEditable={false}>
-              <ToolbarButton
-                title="颜色"
-                icon={<Palette size={14} />}
-                active={openColorMenu}
-                onClick={() => {
-                  setOpenColorMenu((value) => !value);
-                  setOpenRowMenu(false);
-                  setOpenColMenu(false);
-                }}
-              />
-              {openColorMenu ? (
-                <div className="rt-color-menu" contentEditable={false} onMouseDown={(e) => e.preventDefault()}>
-                  <div className="rt-color-section-title">文本</div>
-                  {COLOR_OPTIONS.map((item) => (
-                    <button
-                      key={`txt-${item.label}`}
-                      type="button"
-                      className="rt-color-item"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyTextColor(item.value)}
-                    >
-                      <span className="rt-color-swatch" style={{ color: item.value || '#111827' }}>A</span>
-                      <span>{item.label}</span>
-                      {normalizeColorValue(item.value) === activeTextColor ? <Check size={12} /> : null}
-                    </button>
-                  ))}
-                  <div className="rt-color-section-title">背景色</div>
-                  {BG_OPTIONS.map((item) => (
-                    <button
-                      key={`bg-${item.label}`}
-                      type="button"
-                      className="rt-color-item"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyCellBackground(item.value)}
-                    >
-                      <span className="rt-color-swatch bg" style={{ backgroundColor: item.value || 'transparent' }}>A</span>
-                      <span>{item.label}</span>
-                      {normalizeColorValue(item.value) === activeCellBackground ? <Check size={12} /> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <ToolbarButton title="合并单元格" icon={<span className="rt-mini-text">合</span>} onClick={() => run(() => chainTableFocus()?.mergeCells().run() ?? false, '请先选择多个相邻单元格再合并')} />
-            <ToolbarButton title="拆分单元格" icon={<span className="rt-mini-text">拆</span>} onClick={() => run(() => chainTableFocus()?.splitCell().run() ?? false, '当前单元格不可拆分')} />
-            {isToolbarExpanded ? (
-              <>
-                <span className="rt-divider" />
-                <ToolbarButton title="表头行" icon={<span className="rt-mini-text">行头</span>} onClick={() => run(() => chainTableFocus()?.toggleHeaderRow().run() ?? false, '请先定位到单元格')} />
-                <ToolbarButton title="表头列" icon={<span className="rt-mini-text">列头</span>} onClick={() => run(() => chainTableFocus()?.toggleHeaderColumn().run() ?? false, '请先定位到单元格')} />
-              </>
-            ) : null}
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
-  const floatingControlsPortal = typeof document !== 'undefined' && showUi
-    ? createPortal(
-        <div ref={floatingControlsPortalRef} className="rt-floating-controls-portal" contentEditable={false}>
-          {shouldShowEdgeHandles && colEdgeHandlePosition && colEdgeInBounds ? (
-            <button
-              type="button"
-              className="rt-add-col-handle"
-              style={{
-                top: `${colEdgeHandlePosition.top}px`,
-                left: `${colEdgeHandlePosition.left}px`,
-                height: `${colEdgeHandlePosition.height}px`,
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => runAddTableAction(() => runEdgeAppendAction('col'), '添加列失败，请重试')}
-              title="新增列"
-            >
-              <Plus size={EDGE_PLUS_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowEdgeHandles && clampedRowEdge ? (
-            <button
-              type="button"
-              className="rt-add-row-handle"
-              style={{
-                top: `${clampedRowEdge.top}px`,
-                left: `${clampedRowEdge.left}px`,
-                width: `${clampedRowEdge.width}px`,
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => runAddTableAction(() => runEdgeAppendAction('row'), '添加行失败，请重试')}
-              title="新增行"
-            >
-              <Plus size={EDGE_PLUS_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowTableGrips && clampedRowGripPos ? (
-            <button
-              type="button"
-              className={`rt-table-grip row ${openRowMenu ? 'active' : ''}`}
-              style={{ top: `${clampedRowGripPos.top}px`, left: `${clampedRowGripPos.left}px` }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => {
-                const selected = run(
-                  () => selectAxisFromHandle('row'),
-                  '请先将光标放在目标行中的单元格内'
-                );
-                if (!selected) return;
-                setOpenRowMenu((value) => !value);
-                setOpenColMenu(false);
-                setOpenColorMenu(false);
-              }}
-              title="行操作"
-            >
-              <EllipsisVertical size={GRIP_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowTableGrips && clampedColGripPos ? (
-            <button
-              type="button"
-              className={`rt-table-grip col ${openColMenu ? 'active' : ''}`}
-              style={{ top: `${clampedColGripPos.top}px`, left: `${clampedColGripPos.left}px` }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => {
-                const selected = run(
-                  () => selectAxisFromHandle('col'),
-                  '请先将光标放在目标列中的单元格内'
-                );
-                if (!selected) return;
-                setOpenColMenu((value) => !value);
-                setOpenRowMenu(false);
-                setOpenColorMenu(false);
-              }}
-              title="列操作"
-            >
-              <Ellipsis size={GRIP_ICON_SIZE} />
-            </button>
-          ) : null}
-          {openRowMenu ? (
-            <div
-              className="rt-handle-menu"
-              style={{
-                top: clampedRowGripPos ? `${clampedRowGripPos.top}px` : undefined,
-                left: clampedRowGripPos ? `${clampedRowGripPos.left + GRIP_MENU_OFFSET}px` : undefined,
-                transform: 'translateY(-50%)',
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addRowBefore().run() ?? false, '请先定位到单元格')}>上方添加行</button>
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addRowAfter().run() ?? false, '请先定位到单元格')}>下方添加行</button>
-              <button type="button" className="danger" onClick={() => runTableAction(() => chainTableFocus()?.deleteRow().run() ?? false, '请先定位到单元格')}>删除行</button>
-            </div>
-          ) : null}
-          {openColMenu ? (
-            <div
-              className="rt-handle-menu"
-              style={{
-                top: clampedColGripPos ? `${clampedColGripPos.top + GRIP_MENU_OFFSET}px` : undefined,
-                left: clampedColGripPos ? `${clampedColGripPos.left}px` : undefined,
-                transform: 'translateX(-50%)',
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addColumnBefore().run() ?? false, '请先定位到单元格')}>左侧添加列</button>
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addColumnAfter().run() ?? false, '请先定位到单元格')}>右侧添加列</button>
-              <button type="button" className="danger" onClick={() => runTableAction(() => chainTableFocus()?.deleteColumn().run() ?? false, '请先定位到单元格')}>删除列</button>
-            </div>
-          ) : null}
-        </div>,
-        document.body
-      )
-    : null;
+  const getTableWidth = () => {
+    const tableElement = containerRef.current?.querySelector('.rt-editor table') as HTMLTableElement | null;
+    return tableElement?.getBoundingClientRect().width ?? 0;
+  };
+  const commandApi = {
+    ...useRichTableCommands({
+      applyCellAlign,
+      applyCellBackground,
+      applyTextColor,
+      chainTableFocus,
+      closeInlineMenus,
+      collapseCellSelectionToCursor,
+      editor,
+      focusTableEditor,
+      getTableWidth,
+      runAddTableAction,
+      runEdgeAppendAction,
+      runTableAction,
+      selectAxisFromHandle,
+      setHint,
+      toggleInlineCode,
+      updateTableGripPositions,
+      registerDeferredCleanup: registerDeferredCommandCleanup,
+    }),
+  };
+  const overlayModel = useRichTableOverlayModel({
+    activeCellBackground,
+    activeTextColor,
+    colTopAddButtonPos,
+    containerRef,
+    colGripPos,
+    hasActiveSelection: !!editor?.state.selection && !editor.state.selection.empty,
+    hasCollapsedCellCursor: !!editor?.state.selection?.empty
+      && (editor?.isActive('tableCell') || editor?.isActive('tableHeader')),
+    isColActionLaneHovered: false,
+    isEditable: editor?.isEditable ?? false,
+    isEdgeHandleHovered,
+    isFocused: editor?.isFocused ?? false,
+    isRowActionLaneHovered: false,
+    isTableActive: editor?.isEditable ? editor.isActive('table') : false,
+    isTableHovered,
+    isToolbarHovered,
+    isToolbarExpanded,
+    openColMenu,
+    openColorMenu,
+    openRowMenu,
+    rowGripPos,
+    showUi,
+    tableFrame,
+    tableViewportFrame,
+    toolbarRef,
+  });
+  const overlayActions = {
+    setIsToolbarHovered,
+    setIsEdgeHandleHovered,
+    setIsToolbarExpanded,
+    setOpenColorMenu,
+    setOpenRowMenu,
+    setOpenColMenu,
+  };
 
   return (
-    <div className="rt-container" ref={containerRef}>
-      {toolbarPortal}
-      {floatingControlsPortal}
-      <div className="rt-scroll-shell">
-        <div className="rt-scroll-track" style={{ ['--rt-track-min-width' as string]: trackMinWidth }}>
-          <div className="rt-editor-shell" onMouseDownCapture={handleShellMouseDownCapture}>
-            <div className="rt-editor-content">
-              <EditorContent editor={editor} />
+    <>
+      <RichTableOverlay
+        actions={overlayActions}
+        commandApi={commandApi}
+        floatingControlsPortalRef={floatingControlsPortalRef}
+        overlayModel={overlayModel}
+        toolbarPortalRef={toolbarPortalRef}
+        toolbarRef={toolbarRef}
+      />
+      <div className="rt-container" ref={containerRef}>
+        <div className="rt-scroll-shell">
+          <div
+            className="rt-scroll-track"
+            style={{
+              ['--rt-track-min-width' as string]: trackMinWidth,
+              ['--rt-table-min-width' as string]: tableMinWidth,
+            }}
+          >
+            <div className="rt-editor-shell" onMouseDownCapture={handleShellMouseDownCapture}>
+              <div className="rt-editor-content">
+                <EditorContent editor={editor} />
+              </div>
             </div>
           </div>
         </div>
+        {hint ? <div className="rt-hint" contentEditable={false}>{hint}</div> : null}
       </div>
-      {hint ? <div className="rt-hint" contentEditable={false}>{hint}</div> : null}
-    </div>
+    </>
   );
 };
 

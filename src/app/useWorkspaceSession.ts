@@ -28,9 +28,11 @@ export interface WorkspaceSessionState {
   createDocument: WorkspaceSessionActionsState['createDocument'];
   createFolder: WorkspaceSessionActionsState['createFolder'];
   moveFolder: WorkspaceSessionActionsState['moveFolder'];
+  moveFolderToSpace: WorkspaceSessionActionsState['moveFolderToSpace'];
   renameFolder: WorkspaceSessionActionsState['renameFolder'];
   renameDocument: WorkspaceSessionActionsState['renameDocument'];
   moveDocument: WorkspaceSessionActionsState['moveDocument'];
+  moveDocumentToSpace: WorkspaceSessionActionsState['moveDocumentToSpace'];
   startEditing: WorkspaceSessionActionsState['startEditing'];
   cancelEditing: WorkspaceSessionActionsState['cancelEditing'];
   deleteDocument: WorkspaceSessionActionsState['deleteDocument'];
@@ -135,9 +137,11 @@ export function useWorkspaceSession(
     createDocument: actions.createDocument,
     createFolder: actions.createFolder,
     moveFolder: actions.moveFolder,
+    moveFolderToSpace: actions.moveFolderToSpace,
     renameFolder: actions.renameFolder,
     renameDocument: actions.renameDocument,
     moveDocument: actions.moveDocument,
+    moveDocumentToSpace: actions.moveDocumentToSpace,
     startEditing: actions.startEditing,
     cancelEditing: actions.cancelEditing,
     deleteDocument: actions.deleteDocument,

@@ -45,14 +45,30 @@ test('indexes seeded content and persists workspace search results across reopen
     expect(smokeResult.ok).toBe(true);
     expect(smokeResult.dbPath).toBe(path.join(userDataDir, 'workknowlage.db'));
     expect(smokeResult.seedHit).toMatchObject({
-      kind: 'document',
       title: '创意草案',
     });
+    expect(['document', 'document-block']).toContain(smokeResult.seedHit.kind);
+    expect(smokeResult.blockHits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'document-block',
+          title: 'Smoke Document Renamed',
+          blockId: 'search-heading',
+          documentId: expect.any(String),
+        }),
+      ])
+    );
     expect(smokeResult.persistedHits).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'document',
           title: 'Smoke Document Renamed',
+          spaceId: smokeResult.spaceId,
+        }),
+        expect.objectContaining({
+          kind: 'document-block',
+          title: 'Smoke Document Renamed',
+          blockId: 'search-paragraph',
           spaceId: smokeResult.spaceId,
         }),
         expect.objectContaining({

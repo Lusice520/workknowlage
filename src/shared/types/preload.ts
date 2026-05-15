@@ -38,6 +38,12 @@ export interface WorkKnowlageStorageInfo {
   scopeLabel: string;
 }
 
+export interface DataToolActionDetailItem {
+  label: string;
+  detail?: string;
+  tone?: 'default' | 'warning';
+}
+
 export interface DataToolActionResult {
   success: boolean;
   message: string;
@@ -45,6 +51,7 @@ export interface DataToolActionResult {
   deletedFiles?: number;
   deletedDirectories?: number;
   reclaimedBytes?: number;
+  details?: DataToolActionDetailItem[];
 }
 
 export interface ExportActionResult {
@@ -67,7 +74,7 @@ export interface TrashItemRecord {
   childFolderCount?: number;
 }
 
-export type WorkspaceSearchResultKind = 'document' | 'quick-note';
+export type WorkspaceSearchResultKind = 'document' | 'quick-note' | 'document-block';
 
 export interface WorkspaceSearchResultRecord {
   id: string;
@@ -76,6 +83,8 @@ export interface WorkspaceSearchResultRecord {
   preview: string;
   spaceId: string;
   documentId?: string;
+  blockId?: string;
+  fallbackText?: string;
   folderId?: string;
   noteDate?: string;
 }
@@ -106,6 +115,7 @@ export interface WorkKnowlageDesktopApi {
     create: (data: Omit<FolderNode, 'id'>) => Promise<FolderNode>;
     rename: (id: string, name: string) => Promise<void>;
     move: (id: string, newParentId: string | null) => Promise<void>;
+    moveToSpace?: (id: string, targetSpaceId: string) => Promise<void>;
     delete: (id: string) => Promise<void>;
     trash?: (id: string) => Promise<FolderNode | null>;
   };
@@ -116,6 +126,7 @@ export interface WorkKnowlageDesktopApi {
     create: (data: { spaceId: string; folderId: string | null; title: string }) => Promise<DocumentRecord>;
     update: (id: string, data: DocumentUpdateInput) => Promise<DocumentRecord>;
     move: (id: string, targetFolderId: string | null) => Promise<DocumentRecord>;
+    moveToSpace?: (id: string, targetSpaceId: string) => Promise<void>;
     delete: (id: string) => Promise<void>;
     trash?: (id: string) => Promise<DocumentRecord | null>;
   };
@@ -151,6 +162,7 @@ export interface WorkKnowlageDesktopApi {
     createBackup: () => Promise<DataToolActionResult>;
     restoreBackup: () => Promise<DataToolActionResult>;
     rebuildSearchIndex: () => Promise<DataToolActionResult>;
+    inspectDocumentContentHealth: () => Promise<DataToolActionResult>;
     cleanupOrphanAttachments: () => Promise<DataToolActionResult>;
   };
 

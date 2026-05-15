@@ -26,9 +26,11 @@ export interface WorkspaceSessionActionsState {
   createDocument: (folderId: string | null) => Promise<void>;
   createFolder: (parentId: string | null) => Promise<void>;
   moveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  moveFolderToSpace: (folderId: string, targetSpaceId: string) => Promise<void>;
   renameFolder: (folderId: string, newName: string) => Promise<void>;
   renameDocument: (documentId: string, newTitle: string) => Promise<void>;
   moveDocument: (documentId: string, targetFolderId: string | null) => Promise<void>;
+  moveDocumentToSpace: (documentId: string, targetSpaceId: string) => Promise<void>;
   startEditing: (id: string) => void;
   cancelEditing: () => void;
   deleteDocument: (documentId: string) => Promise<void>;

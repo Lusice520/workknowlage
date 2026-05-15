@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import React, { useCallback, useContext, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { mergeCSSClasses } from '@blocknote/core';
 import {
   BlockNoteContext,
@@ -15,7 +15,7 @@ import {
 } from '../../../node_modules/@blocknote/react/src/editor/EditorContent.js';
 import { knowledgeBaseEditorComponents } from './knowledgeBaseEditorComponents';
 
-const NOOP = () => {};
+const NOOP = () => undefined;
 
 export interface KnowledgeBaseEditorViewProps
   extends Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onChange' | 'onSelectionChange'> {
@@ -40,6 +40,7 @@ export function KnowledgeBaseEditorView({
   const [contentEditableProps, setContentEditableProps] = useState<Record<string, any>>();
   const portalManager = useMemo(() => getContentComponent(), []);
   const mantineContext = useContext(MantineContext);
+  const finalTheme = 'light';
 
   useEditorChange(onChange, editor);
   useEditorSelectionChange(onSelectionChange, editor);
@@ -66,14 +67,29 @@ export function KnowledgeBaseEditorView({
     editor.unmount();
   }, [editable, editor, portalManager]);
 
+  useEffect(() => {
+    if (!editor.portalElement) {
+      return;
+    }
+
+    editor.portalElement.className = mergeCSSClasses(
+      'bn-root',
+      'bn-mantine',
+      finalTheme,
+      className || '',
+    );
+    editor.portalElement.setAttribute('data-color-scheme', finalTheme);
+    editor.portalElement.setAttribute('data-mantine-color-scheme', finalTheme);
+  }, [className, editor, finalTheme]);
+
   const view = (
-    <ComponentsContext.Provider value={knowledgeBaseEditorComponents}>
+    <ComponentsContext.Provider value={knowledgeBaseEditorComponents as any}>
       <BlockNoteContext.Provider value={blockNoteContextValue}>
         <ElementRenderer ref={setElementRenderer} />
         <div
-          className={mergeCSSClasses('bn-container', 'bn-mantine', 'light', className || '')}
-          data-color-scheme="light"
-          data-mantine-color-scheme="light"
+          className={mergeCSSClasses('bn-root', 'bn-container', 'bn-mantine', finalTheme, className || '')}
+          data-color-scheme={finalTheme}
+          data-mantine-color-scheme={finalTheme}
           {...rest}
         >
           <Portals contentComponent={portalManager} />

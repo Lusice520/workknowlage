@@ -1,6 +1,6 @@
-import { Database, FolderSearch, HardDriveDownload, RefreshCw, Trash2, X } from 'lucide-react';
+import { Database, FolderSearch, HardDriveDownload, RefreshCw, ScanSearch, Trash2, X } from 'lucide-react';
 import type { WorkKnowlageRuntimeStatus } from '../../shared/lib/workKnowlageApi';
-import type { WorkKnowlageStorageInfo } from '../../shared/types/preload';
+import type { DataToolActionDetailItem, WorkKnowlageStorageInfo } from '../../shared/types/preload';
 
 interface SettingsModalProps {
   open: boolean;
@@ -9,12 +9,14 @@ interface SettingsModalProps {
   storageInfo?: WorkKnowlageStorageInfo | null;
   lastPersistedAt?: string | null;
   dataToolsFeedback?: string | null;
+  dataToolsDetails?: DataToolActionDetailItem[];
   runningDataTool?: string | null;
   onClose: () => Promise<void> | void;
   onOpenDataDirectory: () => Promise<void> | void;
   onCreateBackup: () => Promise<void> | void;
   onRestoreBackup: () => Promise<void> | void;
   onRebuildSearchIndex: () => Promise<void> | void;
+  onInspectDocumentContentHealth: () => Promise<void> | void;
   onCleanupOrphanAttachments: () => Promise<void> | void;
 }
 
@@ -28,12 +30,14 @@ export function SettingsModal({
   storageInfo,
   lastPersistedAt,
   dataToolsFeedback,
+  dataToolsDetails = [],
   runningDataTool,
   onClose,
   onOpenDataDirectory,
   onCreateBackup,
   onRestoreBackup,
   onRebuildSearchIndex,
+  onInspectDocumentContentHealth,
   onCleanupOrphanAttachments,
 }: SettingsModalProps) {
   if (!open) {
@@ -156,7 +160,19 @@ export function SettingsModal({
               </button>
               <button
                 type="button"
-                className={`${toolButtonClassName} sm:col-span-2`}
+                className={toolButtonClassName}
+                onClick={() => {
+                  void onInspectDocumentContentHealth();
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <ScanSearch size={14} />
+                  检查文稿格式
+                </span>
+              </button>
+              <button
+                type="button"
+                className={toolButtonClassName}
                 onClick={() => {
                   void onCleanupOrphanAttachments();
                 }}
@@ -172,6 +188,36 @@ export function SettingsModal({
             ) : null}
             {dataToolsFeedback ? (
               <p className="mt-2 text-[12px] text-slate-600">{dataToolsFeedback}</p>
+            ) : null}
+            {dataToolsDetails.length > 0 ? (
+              <div className="mt-3 rounded-[16px] border border-slate-200/80 bg-slate-50/80 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                  体检明细
+                </p>
+                <div className="mt-2 space-y-2">
+                  {dataToolsDetails.map((item, index) => (
+                    <div
+                      key={`${item.label}-${item.detail ?? 'detail'}-${index}`}
+                      className="flex items-start justify-between gap-3 rounded-[12px] bg-white/88 px-3 py-2"
+                    >
+                      <p className="min-w-0 flex-1 break-words text-[12px] font-medium text-slate-700">
+                        {item.label}
+                      </p>
+                      {item.detail ? (
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            item.tone === 'warning'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {item.detail}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : null}
           </section>
         </div>

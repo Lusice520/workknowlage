@@ -92,6 +92,60 @@ function moveFolder(id, newParentId) {
   db.prepare("UPDATE folders SET parent_id = ?, updated_at = datetime('now') WHERE id = ?").run(newParentId || null, id);
 }
 
+function moveFolderToSpace(id, targetSpaceId) {
+  const db = getDatabase();
+  const folder = db.prepare(
+    'SELECT id, space_id AS spaceId FROM folders WHERE id = ? AND deleted_at IS NULL'
+  ).get(id);
+  const targetSpace = db.prepare('SELECT id FROM spaces WHERE id = ?').get(targetSpaceId);
+
+  if (!folder || !targetSpace) {
+    throw new Error('Folder move target is invalid.');
+  }
+
+  const { folderIds, documentIds } = collectTreePackageIds(db, 'folder', id);
+  const nextRootSortOrder = db
+    .prepare(
+      `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next
+       FROM folders
+       WHERE space_id = ?
+         AND parent_id IS NULL
+         AND deleted_at IS NULL`
+    )
+    .get(targetSpaceId).next;
+
+  const moveTransaction = db.transaction(() => {
+    if (folderIds.length > 0) {
+      const folderPlaceholders = folderIds.map(() => '?').join(', ');
+      db.prepare(
+        `UPDATE folders
+         SET space_id = ?, updated_at = datetime('now')
+         WHERE id IN (${folderPlaceholders})`
+      ).run(targetSpaceId, ...folderIds);
+    }
+
+    if (documentIds.length > 0) {
+      const documentPlaceholders = documentIds.map(() => '?').join(', ');
+      db.prepare(
+        `UPDATE documents
+         SET space_id = ?, updated_at = datetime('now')
+         WHERE id IN (${documentPlaceholders})`
+      ).run(targetSpaceId, ...documentIds);
+    }
+
+    db.prepare(
+      "UPDATE folders SET parent_id = NULL, sort_order = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(nextRootSortOrder, id);
+  });
+
+  moveTransaction();
+
+  return {
+    sourceSpaceId: folder.spaceId,
+    targetSpaceId,
+  };
+}
+
 function trashFolder(id) {
   const db = getDatabase();
   const folder = db.prepare('SELECT id, space_id AS spaceId FROM folders WHERE id = ? AND deleted_at IS NULL').get(id);
@@ -230,6 +284,7 @@ module.exports = {
   createFolder,
   renameFolder,
   moveFolder,
+  moveFolderToSpace,
   trashFolder,
   restoreFolderTrashRoot,
   deleteFolderTrashRoot,

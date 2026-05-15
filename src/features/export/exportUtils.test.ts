@@ -61,6 +61,20 @@ describe('exportUtils', () => {
     expect(markdown).toContain('| A | B |');
   });
 
+  test('renders Mermaid code blocks as fenced markdown', () => {
+    const markdown = toMarkdownFromBlocks([
+      {
+        id: 'mermaid-1',
+        type: 'codeBlock',
+        props: { language: 'mermaid' },
+        content: [{ type: 'text', text: 'graph TD\nA[PRD] --> B[SPEC]', styles: {} }],
+        children: [],
+      },
+    ]);
+
+    expect(markdown).toBe('```mermaid\ngraph TD\nA[PRD] --> B[SPEC]\n```');
+  });
+
   test('renders printable html for alerts and images', () => {
     const html = toPrintHtmlFromBlocks([
       {

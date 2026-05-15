@@ -11,6 +11,14 @@ interface RichTableToolbarVisibilityState {
   openRowMenu: boolean;
 }
 
+interface RichTableEdgeHandleVisibilityState {
+  hasTableFrame: boolean;
+  isActionLaneHovered: boolean;
+  isEdgeHandleHovered: boolean;
+  openMenu: boolean;
+  showUi: boolean;
+}
+
 export const shouldShowRichTableToolbar = ({
   hasActiveSelection,
   hasCollapsedCellCursor,
@@ -37,3 +45,19 @@ export const shouldShowRichTableToolbar = ({
     openColMenu
   );
 };
+
+export const shouldShowRichTableColEdgeHandle = ({
+  hasTableFrame,
+  isActionLaneHovered,
+  isEdgeHandleHovered,
+  openMenu,
+  showUi,
+}: RichTableEdgeHandleVisibilityState) => {
+  if (!showUi || !hasTableFrame) {
+    return false;
+  }
+
+  return isActionLaneHovered || isEdgeHandleHovered || openMenu;
+};
+
+export const shouldShowRichTableRowEdgeHandle = shouldShowRichTableColEdgeHandle;

@@ -1,4 +1,4 @@
-type JsonRecord = Record<string, unknown>;
+import { asRecord, parseContentArray, type JsonRecord } from './documentContent';
 
 export interface ExtractedDocumentMention {
   targetDocumentId: string;
@@ -7,22 +7,6 @@ export interface ExtractedDocumentMention {
 }
 
 const BACKLINK_DESCRIPTION_LIMIT = 120;
-
-const asRecord = (value: unknown): JsonRecord | null =>
-  typeof value === 'object' && value !== null ? (value as JsonRecord) : null;
-
-const parseContentArray = (contentJson: string | null | undefined): unknown[] => {
-  if (typeof contentJson !== 'string' || contentJson.trim().length === 0) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(contentJson);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
 
 const normalizeTitle = (value: unknown): string => {
   if (typeof value !== 'string') {

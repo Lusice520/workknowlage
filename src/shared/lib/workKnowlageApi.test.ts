@@ -186,6 +186,15 @@ describe('workKnowlageApi', () => {
     });
   });
 
+  test('reports that document content health inspection is unavailable in browser mock mode', async () => {
+    const api = createFallbackDesktopApi();
+
+    await expect(api.maintenance?.inspectDocumentContentHealth?.()).resolves.toMatchObject({
+      success: true,
+      message: expect.stringContaining('浏览器 Mock 环境不检查真实文稿格式'),
+    });
+  });
+
   test('moves fallback documents into another folder', async () => {
     const api = createFallbackDesktopApi();
 
@@ -279,6 +288,34 @@ describe('workKnowlageApi', () => {
           kind: 'quick-note',
           title: '3月26日快记',
           noteDate: '2026-03-26',
+        }),
+      ])
+    );
+  });
+
+  test('returns block-level fallback hits for both legacy sections and blocknote content', async () => {
+    const api = createFallbackDesktopApi();
+
+    const legacyBlockHits = await api.search?.query('personal-workspace', '毫秒级');
+    const blockNoteHits = await api.search?.query('personal-workspace', '信息辅助');
+
+    expect(legacyBlockHits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'document-block',
+          title: '创意草案',
+          documentId: 'doc-creative-draft',
+          blockId: 'section-tech-list',
+        }),
+      ])
+    );
+    expect(blockNoteHits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'document-block',
+          title: '架构设计',
+          documentId: 'doc-architecture-design',
+          blockId: 'section-arch-copy',
         }),
       ])
     );

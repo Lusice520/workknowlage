@@ -15,6 +15,7 @@ const { savePdfFromHtml } = require('./export/pdf.cjs');
 const {
   cleanupOrphanAttachments,
   createBackupSnapshot,
+  inspectDocumentContentHealth,
   restoreBackupSnapshot,
 } = require('./maintenance/dataTools.cjs');
 const {
@@ -75,12 +76,20 @@ function syncSearchAndBacklinksForSpace(spaceId, options = {}) {
   rebuildBacklinksForSpace(spaceId);
 }
 
+function syncAfterCrossSpaceMove(sourceSpaceId, targetSpaceId) {
+  searchRepo.rebuildWorkspaceSearchIndex();
+
+  const spaceIds = [...new Set([sourceSpaceId, targetSpaceId].filter(Boolean))];
+  spaceIds.forEach((spaceId) => rebuildBacklinksForSpace(spaceId));
+}
+
 function removeDocumentSearchEntry(documentId) {
   if (!documentId) {
     return;
   }
 
   searchRepo.removeSearchEntry(documentId);
+  searchRepo.removeDocumentBlockSearchEntries(documentId);
 }
 
 function removeUploadsForDocumentIds(documentIds) {
@@ -353,6 +362,11 @@ function registerIpcHandlers() {
   ipcMain.handle('folders:create', (_event, data) => foldersRepo.createFolder(data));
   ipcMain.handle('folders:rename', (_event, id, name) => foldersRepo.renameFolder(id, name));
   ipcMain.handle('folders:move', (_event, id, newParentId) => foldersRepo.moveFolder(id, newParentId));
+  ipcMain.handle('folders:moveToSpace', (_event, id, targetSpaceId) => {
+    const result = foldersRepo.moveFolderToSpace(id, targetSpaceId);
+    syncAfterCrossSpaceMove(result?.sourceSpaceId, result?.targetSpaceId);
+    return result;
+  });
   ipcMain.handle('folders:trash', (_event, id) => {
     const folder = foldersRepo.trashFolder(id);
     if (folder?.spaceId) {
@@ -384,6 +398,11 @@ function registerIpcHandlers() {
     const document = documentsRepo.moveDocument(id, targetFolderId);
     syncSearchAndBacklinksForSpace(document?.spaceId, { upsertDocument: document });
     return document;
+  });
+  ipcMain.handle('documents:moveToSpace', (_event, id, targetSpaceId) => {
+    const result = documentsRepo.moveDocumentToSpace(id, targetSpaceId);
+    syncAfterCrossSpaceMove(result?.sourceSpaceId, result?.targetSpaceId);
+    return result?.document ?? null;
   });
   ipcMain.handle('documents:trash', (_event, id) => {
     const document = documentsRepo.trashDocument(id);
@@ -542,6 +561,7 @@ function registerIpcHandlers() {
       uploadsRootDir: uploadStorage?.uploadsRootDir ?? path.join(getUserDataDir(), 'uploads'),
     })
   );
+  ipcMain.handle('maintenance:inspectDocumentContentHealth', () => inspectDocumentContentHealth());
 
   // ─── Local assets ─────────────────────────────────────
   ipcMain.handle('assets:upload', (_event, documentId, assets) => {

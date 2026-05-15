@@ -24,7 +24,7 @@ function parseDocumentListArgs(args: any[]) {
 
 function createDesktopApi(): WorkKnowlageDesktopApi {
   return {
-    meta: { version: '0.1.0' },
+    meta: { version: '0.2.0' },
     spaces: {
       list: async () => [
         { id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' },
@@ -48,6 +48,7 @@ function createDesktopApi(): WorkKnowlageDesktopApi {
       create: async (data) => ({ id: 'folder-new', ...data }),
       rename: async () => {},
       move: async () => {},
+      moveToSpace: async () => {},
       delete: async () => {},
     },
     documents: {
@@ -117,6 +118,7 @@ function createDesktopApi(): WorkKnowlageDesktopApi {
         backlinks: [],
         sections: [],
       }),
+      moveToSpace: async () => {},
       delete: async () => {},
     },
     quickNotes: {
@@ -257,6 +259,7 @@ function renderSidebarHarness({
             expandedFolderIds: [...new Set([...prev.expandedFolderIds, ...(targetParentId ? [targetParentId] : [])])],
           }));
         }}
+        onRequestMoveFolderToSpace={() => {}}
         onRenameFolder={async () => {}}
         onRenameDocument={async () => {}}
         onMoveDocument={async (documentId, targetFolderId) => {
@@ -278,6 +281,7 @@ function renderSidebarHarness({
             };
           });
         }}
+        onRequestMoveDocumentToSpace={() => {}}
         onStartEditing={() => {}}
         onCancelEditing={() => {}}
         onDeleteDocument={async () => {}}
@@ -647,6 +651,65 @@ test('exposes delete actions for folders and documents behind confirmation', asy
   });
 });
 
+test('moves a document to another space from the sidebar more menu', async () => {
+  const api = createDesktopApi();
+  const moveDocumentToSpaceSpy = vi.fn().mockResolvedValue(undefined);
+
+  (api.documents as any).moveToSpace = moveDocumentToSpaceSpy;
+  window.workKnowlage = api;
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: 'Alpha Doc' })).toBeInTheDocument();
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  await openSidebarMenu(sidebar, 'Alpha Doc 更多操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '移动到空间' }));
+
+  const dialog = await screen.findByRole('dialog', { name: '移动到空间' });
+  expect(within(dialog).queryByText('Alpha Space')).not.toBeInTheDocument();
+
+  fireEvent.click(within(dialog).getByRole('button', { name: /Bravo Space/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认移动' }));
+
+  await waitFor(() => {
+    expect(moveDocumentToSpaceSpy).toHaveBeenCalledWith('doc-alpha', 'space-bravo');
+  });
+});
+
+test('moves a folder to another space from the sidebar more menu', async () => {
+  const api = createDesktopApi();
+  const moveFolderToSpaceSpy = vi.fn().mockResolvedValue(undefined);
+
+  (api.folders as any).moveToSpace = moveFolderToSpaceSpy;
+  window.workKnowlage = api;
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: 'Alpha Doc' })).toBeInTheDocument();
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  await openSidebarMenu(sidebar, 'Alpha Folder 更多操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '移动到空间' }));
+
+  const dialog = await screen.findByRole('dialog', { name: '移动到空间' });
+  expect(within(dialog).queryByText('Alpha Space')).not.toBeInTheDocument();
+
+  fireEvent.click(within(dialog).getByRole('button', { name: /Charlie Space/ }));
+  await waitFor(() => {
+    expect(within(dialog).getByRole('button', { name: /Charlie Space/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认移动' }));
+
+  await waitFor(() => {
+    expect(moveFolderToSpaceSpy).toHaveBeenCalledWith('folder-alpha', 'space-charlie');
+  });
+});
+
 test('supports creating child documents from a document row create menu', async () => {
   const initialState: WorkspaceState = {
     activeSpaceId: 'space-alpha',
@@ -841,6 +904,144 @@ test('renders child folders and documents nested beneath a document node', async
   expect(within(sidebar).getByText('Child Doc')).toBeInTheDocument();
 });
 
+test('uses the same 12px/8px nested gutter across deeper tree levels', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-alpha',
+    expandedFolderIds: ['folder-alpha', 'doc-alpha', 'folder-child'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder' },
+        { id: 'folder-child', spaceId: 'space-alpha', parentId: 'doc-alpha', name: 'Child Folder' },
+      ],
+      documents: [
+        {
+          id: 'doc-alpha',
+          spaceId: 'space-alpha',
+          folderId: 'folder-alpha',
+          title: 'Alpha Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '10 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+        {
+          id: 'doc-child',
+          spaceId: 'space-alpha',
+          folderId: 'doc-alpha',
+          title: 'Child Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '3 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+      ],
+    },
+  };
+
+  await renderSidebarHarness({ initialState });
+
+  const nestedTrees = screen.getByTestId('left-sidebar').querySelectorAll('div.border-l');
+
+  expect(nestedTrees.length).toBeGreaterThanOrEqual(2);
+  nestedTrees.forEach((tree) => {
+    expect(tree).toHaveClass('ml-3');
+    expect(tree).toHaveClass('pl-2');
+  });
+});
+
+test('renders the active document without left or right rail indicators', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-alpha',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder' },
+      ],
+      documents: [
+        {
+          id: 'doc-alpha',
+          spaceId: 'space-alpha',
+          folderId: 'folder-alpha',
+          title: 'Alpha Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '10 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+      ],
+    },
+  };
+
+  await renderSidebarHarness({ initialState });
+
+  const activeRow = screen.getByText('Alpha Doc').closest('[role="button"]');
+
+  expect(activeRow).not.toHaveClass('before:left-[-4px]');
+  expect(activeRow).not.toHaveClass('after:right-1.5');
+  expect(activeRow).toHaveClass('bg-[rgba(238,243,255,0.96)]');
+});
+
+test('aligns root documents and folders to the same title column', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-root',
+    expandedFolderIds: ['folder-root'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [{ id: 'folder-root', spaceId: 'space-alpha', parentId: null, name: 'Root Folder' }],
+      documents: [
+        {
+          id: 'doc-root',
+          spaceId: 'space-alpha',
+          folderId: null,
+          title: 'Root Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '5 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+      ],
+    },
+  };
+
+  await renderSidebarHarness({ initialState });
+
+  const rootDocRow = screen.getByText('Root Doc').closest('[role="button"]');
+  const rootFolderRow = screen.getByText('Root Folder').closest('[role="button"]');
+  const rootDocLeading = rootDocRow?.firstElementChild;
+  const rootFolderLeading = rootFolderRow?.firstElementChild;
+
+  expect(rootDocLeading).toHaveClass('grid');
+  expect(rootDocLeading).toHaveClass('grid-cols-[16px_16px_minmax(0,1fr)]');
+  expect(rootDocLeading).toHaveClass('gap-x-2');
+  expect(rootFolderLeading).toHaveClass('grid');
+  expect(rootFolderLeading).toHaveClass('grid-cols-[16px_16px_minmax(0,1fr)]');
+  expect(rootFolderLeading).toHaveClass('gap-x-2');
+});
+
 test('opens the selected daily quick note inside the center pane', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-03-26T08:00:00+08:00'));
@@ -1016,7 +1217,7 @@ test('searches documents from the sidebar and opens the selected document', asyn
     expect(screen.getByRole('heading', { name: '创意草案' })).toBeInTheDocument();
   });
 
-  const searchInput = screen.getByPlaceholderText('搜索文档和快记...');
+  const searchInput = screen.getByPlaceholderText('搜索文档、片段和快记...');
   fireEvent.change(searchInput, { target: { value: '架构' } });
 
   const resultButton = await screen.findByRole('button', { name: '打开文档 架构设计' });
@@ -1079,7 +1280,7 @@ test('searches quick notes from the sidebar and opens the selected quick note', 
     await vi.runAllTimersAsync();
   });
 
-  const searchInput = screen.getByPlaceholderText('搜索文档和快记...');
+  const searchInput = screen.getByPlaceholderText('搜索文档、片段和快记...');
   fireEvent.change(searchInput, { target: { value: '待办' } });
 
   await act(async () => {

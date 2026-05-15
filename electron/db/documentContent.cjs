@@ -1,6 +1,18 @@
+/**
+ * 注意：本文件中的 asRecord / parseContentArray / collectMentionTargets /
+ * collectMentionsFromBlocks / extractDocumentMentions 是 TS 权威源
+ * src/shared/lib/documentMentions.ts 的 CJS 副本。
+ *
+ * 修改逻辑时请先更新 TypeScript 版本，再同步此处。
+ * P2 可加构建步骤统一两份副本，避免手动同步风险。
+ *
+ * @see ../src/shared/lib/documentMentions.ts
+ * @see ../src/shared/lib/documentContent.ts (parseContentArray / asRecord 的 TS 版本)
+ */
 const EMPTY_CONTENT_JSON = '[]';
 const BACKLINK_DESCRIPTION_LIMIT = 120;
 
+// ⚠️ 与 src/shared/lib/documentContent.ts 中的 asRecord 相同
 function asRecord(value) {
   return typeof value === 'object' && value !== null ? value : null;
 }
@@ -13,6 +25,7 @@ function stripLegacyHeadingPrefix(title) {
   return title.replace(/^\d+\.\s*/, '').trim();
 }
 
+// ⚠️ 与 src/shared/lib/documentContent.ts 中的 parseContentArray 相同
 function parseContentArray(contentJson) {
   if (typeof contentJson !== 'string' || contentJson.trim().length === 0) {
     return [];
@@ -178,6 +191,81 @@ function serializeSectionsAsContentJson(sections) {
   return JSON.stringify(Array.isArray(sections) ? sections : []);
 }
 
+function getContentJsonStorageKind(contentJson) {
+  const parsed = parseContentArray(contentJson);
+  if (parsed.length === 0) {
+    return 'empty';
+  }
+
+  return parsed.every((block) => isLegacySection(block))
+    ? 'legacy-sections'
+    : 'blocks';
+}
+
+function textNode(text) {
+  return [{ type: 'text', text, styles: {} }];
+}
+
+function legacySectionToBlocks(section) {
+  if (section.type === 'heading') {
+    return [{
+      id: section.id,
+      type: 'heading',
+      props: { level: 1 },
+      content: textNode(section.title || ''),
+      children: [],
+    }];
+  }
+
+  if (section.type === 'paragraph') {
+    return [{
+      id: section.id,
+      type: 'paragraph',
+      content: textNode(section.content || ''),
+      children: [],
+    }];
+  }
+
+  if (section.type === 'quote') {
+    return [{
+      id: section.id,
+      type: 'quote',
+      content: textNode(section.content || ''),
+      children: [],
+    }];
+  }
+
+  if (section.type === 'bullet-list') {
+    return (Array.isArray(section.items) ? section.items : []).map((item, index) => ({
+      id: `${section.id}-item-${index}`,
+      type: 'bulletListItem',
+      content: textNode(item),
+      children: [],
+    }));
+  }
+
+  if (section.type === 'gallery') {
+    return (Array.isArray(section.items) ? section.items : []).map((item, index) => ({
+      id: `${section.id}-gallery-${index}`,
+      type: 'paragraph',
+      content: textNode(item),
+      children: [],
+    }));
+  }
+
+  return [];
+}
+
+function migrateLegacyContentJsonToBlocks(contentJson) {
+  const parsed = parseContentArray(contentJson);
+  if (parsed.length === 0 || !parsed.every((block) => isLegacySection(block))) {
+    return normalizeContentJson(contentJson);
+  }
+
+  const nextBlocks = parsed.flatMap((section) => legacySectionToBlocks(section));
+  return JSON.stringify(nextBlocks);
+}
+
 function deriveSectionsFromContentJson(contentJson) {
   const blocks = parseContentArray(contentJson);
   if (blocks.every((block) => isLegacySection(block))) {
@@ -219,6 +307,7 @@ function normalizeTitle(value) {
   return value.trim();
 }
 
+// ⚠️ 与 src/shared/lib/documentMentions.ts 中的 collectMentionTargets 相同
 function collectMentionTargets(
   value,
   mentions = [],
@@ -265,6 +354,7 @@ function buildBacklinkDescription(block, mentionTitle) {
   return mentionTitle ? `提到：@${mentionTitle}` : '提到了一篇文档';
 }
 
+// ⚠️ 与 src/shared/lib/documentMentions.ts 中的 collectMentionsFromBlocks 相同
 function collectMentionsFromBlocks(blocks, sourceDocumentId, extractedMentions = []) {
   const seenTargetIds = new Set();
 
@@ -301,14 +391,17 @@ function collectMentionsFromBlocks(blocks, sourceDocumentId, extractedMentions =
   return extractedMentions;
 }
 
+// ⚠️ 与 src/shared/lib/documentMentions.ts 中的 extractDocumentMentions 相同
 function extractDocumentMentions(contentJson, sourceDocumentId) {
   return collectMentionsFromBlocks(parseContentArray(contentJson), sourceDocumentId);
 }
 
 module.exports = {
   EMPTY_CONTENT_JSON,
+  getContentJsonStorageKind,
   normalizeContentJson,
   serializeSectionsAsContentJson,
+  migrateLegacyContentJsonToBlocks,
   deriveSectionsFromContentJson,
   deriveOutlineFromContentJson,
   deriveWordCount,

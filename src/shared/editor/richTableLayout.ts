@@ -2,6 +2,12 @@ export const RICH_TABLE_DEFAULT_COLUMN_COUNT = 3;
 export const RICH_TABLE_SCROLL_COLUMN_THRESHOLD = 6;
 export const RICH_TABLE_MIN_COLUMN_WIDTH = 160;
 
+const createSizedCellAttrs = () => ({
+  colspan: 1,
+  rowspan: 1,
+  colwidth: [RICH_TABLE_MIN_COLUMN_WIDTH],
+});
+
 export const buildDefaultRichTableDoc = (columnCount = RICH_TABLE_DEFAULT_COLUMN_COUNT): any => {
   const normalizedColumnCount = Math.max(1, Math.floor(columnCount || RICH_TABLE_DEFAULT_COLUMN_COUNT));
 
@@ -15,6 +21,7 @@ export const buildDefaultRichTableDoc = (columnCount = RICH_TABLE_DEFAULT_COLUMN
             type: 'tableRow',
             content: Array.from({ length: normalizedColumnCount }, (_, index) => ({
               type: 'tableHeader',
+              attrs: createSizedCellAttrs(),
               content: [
                 {
                   type: 'paragraph',
@@ -27,6 +34,7 @@ export const buildDefaultRichTableDoc = (columnCount = RICH_TABLE_DEFAULT_COLUMN
             type: 'tableRow',
             content: Array.from({ length: normalizedColumnCount }, () => ({
               type: 'tableCell',
+              attrs: createSizedCellAttrs(),
               content: [{ type: 'paragraph' }],
             })),
           },
@@ -44,11 +52,10 @@ export const getRichTableColumnCount = (doc: any) => {
 };
 
 export const getRichTableTrackMinWidth = (columnCount: number) => {
+  return getRichTableTableMinWidth(columnCount);
+};
+
+export const getRichTableTableMinWidth = (columnCount: number) => {
   const normalizedColumnCount = Math.max(1, Math.floor(columnCount || RICH_TABLE_DEFAULT_COLUMN_COUNT));
-
-  if (normalizedColumnCount < RICH_TABLE_SCROLL_COLUMN_THRESHOLD) {
-    return '100%';
-  }
-
   return `${normalizedColumnCount * RICH_TABLE_MIN_COLUMN_WIDTH}px`;
 };

@@ -1,19 +1,175 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import App from '../../app/App';
+import type { DocumentRecord } from '../../shared/types/workspace';
 import { RightSidebar } from './RightSidebar';
 
-test('renders outline, tags, and backlinks for the active document', async () => {
+const createDocument = (overrides: Partial<DocumentRecord> = {}): DocumentRecord => ({
+  id: 'doc-default',
+  spaceId: 'space-1',
+  folderId: null,
+  title: '默认文稿',
+  contentJson: JSON.stringify([]),
+  updatedAtLabel: 'today',
+  wordCountLabel: '0 字',
+  badgeLabel: '',
+  outline: [],
+  tags: [],
+  backlinks: [],
+  sections: [],
+  ...overrides,
+});
+
+const emptyAssociationState = {
+  relatedDocuments: [],
+  relatedTags: [],
+  similarBlocks: [],
+  suggestedLinks: [],
+  textEvidence: [],
+  summary: {
+    wikiAssociationCount: 0,
+  },
+};
+
+const openWikiTab = () => {
+  fireEvent.click(screen.getByRole('button', { name: /^Wiki/ }));
+};
+
+test('renders property and wiki tabs with a wiki association badge', () => {
+  render(
+    <RightSidebar
+      activeDocument={createDocument({
+        id: 'doc-current',
+        title: '当前文档',
+        tags: [{ id: 'tag-product', label: '#产品', tone: 'primary' }],
+      })}
+      activeQuickNote={null}
+      activeFolder={null}
+      activeSpace={null}
+      associationState={{
+        ...emptyAssociationState,
+        relatedDocuments: [
+          {
+            documentId: 'doc-related',
+            title: '关系图方案',
+            folderPath: '产品策略',
+            score: 8,
+            reason: '内容相似',
+          },
+        ],
+        textEvidence: [
+          {
+            documentId: 'doc-evidence',
+            documentTitle: '问题清单宣贯稿内容',
+            blockId: 'long-context',
+            label: '问题清单宣贯稿内容',
+            matchedText: '公司坚定不移践行产品化路线',
+            snippet: '公司坚定不移践行产品化路线，致力于打造标准化、可复用的产品体系。',
+            reason: '命中关键句',
+            score: 12,
+          },
+        ],
+        summary: {
+          wikiAssociationCount: 2,
+        },
+      }}
+      onAddTagToDocument={async () => {}}
+      onRemoveTagFromDocument={async () => {}}
+    />
+  );
+
+  expect(screen.getByRole('button', { name: '属性' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Wiki 2/ })).toBeInTheDocument();
+  expect(screen.getByText('标签云')).toBeInTheDocument();
+  expect(screen.queryByText('显式引用')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Wiki 2/ }));
+
+  expect(screen.getByText('显式引用')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
+  expect(screen.getByText('原文线索')).toBeInTheDocument();
+});
+
+test('renders text evidence in the wiki tab and opens the matched source block', () => {
+  const handleOpenBacklinkDocument = vi.fn();
+
+  render(
+    <RightSidebar
+      activeDocument={createDocument({
+        id: 'doc-current',
+        title: '测试文档',
+      })}
+      activeQuickNote={null}
+      activeFolder={null}
+      activeSpace={null}
+      associationState={{
+        ...emptyAssociationState,
+        textEvidence: [
+          {
+            documentId: 'doc-evidence',
+            documentTitle: '问题清单宣贯稿内容',
+            blockId: 'long-context',
+            label: '问题清单宣贯稿内容',
+            matchedText: '公司坚定不移践行产品化路线',
+            snippet: '公司坚定不移践行产品化路线，致力于打造标准化、可复用的产品体系。',
+            reason: '命中关键句',
+            score: 12,
+          },
+        ],
+        summary: {
+          wikiAssociationCount: 1,
+        },
+      }}
+      onAddTagToDocument={async () => {}}
+      onRemoveTagFromDocument={async () => {}}
+      onOpenBacklinkDocument={handleOpenBacklinkDocument}
+    />
+  );
+
+  openWikiTab();
+
+  expect(screen.getByText('原文线索')).toBeInTheDocument();
+  expect(screen.getByText('问题清单宣贯稿内容')).toBeInTheDocument();
+  expect(screen.getByText(/公司坚定不移践行产品化路线/)).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: '打开原文线索 问题清单宣贯稿内容 / 公司坚定不移践行产品化路线',
+    }),
+  );
+
+  expect(handleOpenBacklinkDocument).toHaveBeenCalledWith({
+    documentId: 'doc-evidence',
+    blockId: 'long-context',
+    fallbackText: expect.stringContaining('公司坚定不移践行产品化路线'),
+  });
+});
+
+test('renders the overview and knowledge association sections for the active document', async () => {
   render(<App />);
 
   await waitFor(() => {
-    expect(screen.getByText('内容目录')).toBeInTheDocument();
+    expect(screen.getByText('文稿脉络')).toBeInTheDocument();
   });
 
-  expect(screen.getByTestId('right-sidebar')).toHaveClass('overflow-hidden');
+  expect(screen.getByTestId('right-sidebar')).toHaveClass('overflow-visible');
   expect(screen.getByTestId('right-sidebar-outline-scroll')).toHaveClass('overflow-y-auto');
+  expect(screen.getByText('文稿概览')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '属性' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^Wiki/ })).toBeInTheDocument();
   expect(screen.getByText('#产品')).toBeInTheDocument();
+  expect(screen.queryByText('知识关联')).not.toBeInTheDocument();
+
+  openWikiTab();
+
+  expect(screen.getByTestId('knowledge-association-card')).toHaveClass('border-t');
+  expect(screen.getByText('知识关联')).toBeInTheDocument();
+  expect(screen.getByText('显式引用')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
+  expect(screen.getByText('原文线索')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '打开来源文档 架构设计' })).toBeInTheDocument();
+  expect(screen.queryByText('上下文')).not.toBeInTheDocument();
+  expect(screen.queryByText('关联')).not.toBeInTheDocument();
   expect(screen.queryByText('文档大纲')).not.toBeInTheDocument();
   expect(screen.queryByText('文档属性')).not.toBeInTheDocument();
   expect(screen.queryByText('局域网只读')).not.toBeInTheDocument();
@@ -164,6 +320,8 @@ test('opens the source document when clicking a backlink card', () => {
     />
   );
 
+  openWikiTab();
+
   fireEvent.click(screen.getByRole('button', { name: '打开来源文档 来源文档' }));
 
   expect(handleOpenBacklinkDocument).toHaveBeenCalledWith({
@@ -172,13 +330,11 @@ test('opens the source document when clicking a backlink card', () => {
   });
 });
 
-test('renders outgoing and incoming reference groups for the active document', () => {
+test('renders explicit reference groups inside the knowledge association card', () => {
   render(
     <RightSidebar
-      activeDocument={{
+      activeDocument={createDocument({
         id: 'doc-current',
-        spaceId: 'space-1',
-        folderId: null,
         title: '当前文档',
         contentJson: JSON.stringify([
           {
@@ -207,11 +363,6 @@ test('renders outgoing and incoming reference groups for the active document', (
             children: [],
           },
         ]),
-        updatedAtLabel: 'today',
-        wordCountLabel: '0 字',
-        badgeLabel: '',
-        outline: [],
-        tags: [],
         backlinks: [
           {
             id: 'backlink-source',
@@ -221,8 +372,7 @@ test('renders outgoing and incoming reference groups for the active document', (
             description: '这里提到了当前文档',
           },
         ],
-        sections: [],
-      }}
+      })}
       activeQuickNote={null}
       activeFolder={null}
       activeSpace={null}
@@ -232,8 +382,11 @@ test('renders outgoing and incoming reference groups for the active document', (
     />
   );
 
-  expect(screen.getByText('提及文档')).toBeInTheDocument();
-  expect(screen.getByText('被提及于')).toBeInTheDocument();
+  openWikiTab();
+
+  expect(screen.getByText('知识关联')).toBeInTheDocument();
+  expect(screen.getByText('显式引用')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '打开提及文档 目标文档' })).toBeInTheDocument();
   expect(screen.getAllByText('目标文档')).toHaveLength(1);
   expect(screen.getByRole('button', { name: '打开来源文档 来源文档' })).toBeInTheDocument();
@@ -284,6 +437,8 @@ test('opens the mentioned target document when clicking an outgoing reference ca
     />
   );
 
+  openWikiTab();
+
   fireEvent.click(screen.getByRole('button', { name: '打开提及文档 目标文档' }));
 
   expect(handleOpenBacklinkDocument).toHaveBeenCalledWith({
@@ -292,23 +447,151 @@ test('opens the mentioned target document when clicking an outgoing reference ca
   });
 });
 
-test('shows a unified empty state when the active document has no references', () => {
+test('renders similar knowledge results for the active document and opens matched blocks from the hover preview', async () => {
+  const handleOpenBacklinkDocument = vi.fn();
+
   render(
     <RightSidebar
-      activeDocument={{
+      activeDocument={createDocument({
         id: 'doc-current',
-        spaceId: 'space-1',
-        folderId: null,
         title: '当前文档',
-        contentJson: JSON.stringify([]),
-        updatedAtLabel: 'today',
-        wordCountLabel: '0 字',
-        badgeLabel: '',
-        outline: [],
-        tags: [],
-        backlinks: [],
-        sections: [],
+        tags: [{ id: 'tag-product', label: '#产品', tone: 'primary' }],
+        sections: [
+          { id: 'section-current', type: 'paragraph', title: '当前文稿命中 1', content: '知识库语义面板展示相似文稿与相似片段预览。' },
+          { id: 'section-current-2', type: 'paragraph', title: '当前文稿命中 2', content: '引用与提及列表应该保持清晰的视觉层级。' },
+        ],
+      })}
+      activeQuickNote={null}
+      activeFolder={null}
+      activeSpace={null}
+      associationState={{
+        ...emptyAssociationState,
+        relatedDocuments: [
+          {
+            documentId: 'doc-related',
+            title: '关系图方案',
+            folderPath: '产品策略',
+            score: 8,
+            reason: '2 处内容相似',
+            previewMatches: [
+              {
+                blockId: 'section-related',
+                label: '相似命中 1',
+                snippet: '知识库语义面板支持相似文稿和相似片段预览。',
+                searchText: '知识库语义面板支持相似文稿和相似片段预览。',
+              },
+              {
+                blockId: 'section-related-2',
+                label: '相似命中 2',
+                snippet: '引用与提及列表应该保持轻量而清晰的视觉层级。',
+                searchText: '引用与提及列表应该保持轻量而清晰的视觉层级。',
+              },
+            ],
+            matchCount: 2,
+          },
+        ],
       }}
+      onAddTagToDocument={async () => {}}
+      onRemoveTagFromDocument={async () => {}}
+      onOpenBacklinkDocument={handleOpenBacklinkDocument}
+    />
+  );
+
+  openWikiTab();
+
+  expect(screen.getByText('知识关联')).toBeInTheDocument();
+  expect(screen.getByText('显式引用')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
+  const similarDocumentButton = screen.getByRole('button', { name: '打开相似文稿 关系图方案' });
+  expect(similarDocumentButton).toBeInTheDocument();
+  expect(screen.queryByText('推荐标签')).not.toBeInTheDocument();
+  expect(screen.queryByText('建议链接')).not.toBeInTheDocument();
+  expect(screen.queryByText('知识库语义面板展示相似文稿与相似片段预览。')).not.toBeInTheDocument();
+
+  fireEvent.mouseEnter(similarDocumentButton);
+
+  expect(screen.getByText(/知识库语义面板支持相似文稿/)).toBeInTheDocument();
+  expect(screen.getByText(/引用与提及列表应该保持轻量/)).toBeInTheDocument();
+
+  const matchedBlockButton = await screen.findByRole('button', {
+    name: '打开相似命中 关系图方案 / 相似命中 1',
+  });
+  fireEvent.click(matchedBlockButton);
+
+  await waitFor(() => {
+    expect(handleOpenBacklinkDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: 'doc-related',
+        blockId: 'section-related',
+        fallbackText: expect.stringContaining('知识库语义面板支持相似文稿和相似片段预览。'),
+      }),
+    );
+  });
+  expect(screen.queryByText(/知识库语义面板支持相似文稿/)).not.toBeInTheDocument();
+
+  fireEvent.mouseLeave(similarDocumentButton);
+
+  expect(screen.queryByText(/引用与提及列表应该保持轻量/)).not.toBeInTheDocument();
+});
+
+test('shows similar block knowledge after clicking an outline item', () => {
+  const handleOpenBacklinkDocument = vi.fn();
+
+  render(
+    <RightSidebar
+      activeDocument={createDocument({
+        id: 'doc-current',
+        title: '当前文档',
+        outline: [{ id: 'heading-focus', title: '实验设计', level: 2 }],
+        sections: [
+          { id: 'heading-focus', type: 'heading', title: '实验设计', content: '实验设计' },
+          { id: 'section-current', type: 'paragraph', content: '需要比较图谱推荐与标签推荐的效果。' },
+        ],
+      })}
+      activeQuickNote={null}
+      activeFolder={null}
+      activeSpace={null}
+      associationState={{
+        ...emptyAssociationState,
+        similarBlocks: [
+          {
+            documentId: 'doc-peer',
+            documentTitle: '推荐实验记录',
+            blockId: 'section-peer-body',
+            label: '图谱推荐在实验设计阶段补充了更多候选关系。',
+            text: '图谱推荐在实验设计阶段补充了更多候选关系。',
+            score: 4,
+          },
+        ],
+      }}
+      focusedOutlineItemId="heading-focus"
+      onAddTagToDocument={async () => {}}
+      onRemoveTagFromDocument={async () => {}}
+      onOpenBacklinkDocument={handleOpenBacklinkDocument}
+    />
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '定位到大纲标题 实验设计' }));
+  openWikiTab();
+
+  expect(handleOpenBacklinkDocument).toHaveBeenCalledWith({
+    documentId: 'doc-current',
+    blockId: 'heading-focus',
+  });
+  expect(screen.getByText('知识关联')).toBeInTheDocument();
+  expect(screen.getByText('相关主题')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: '打开相似片段 推荐实验记录 / 图谱推荐在实验设计阶段补充了更多候选关系。' }),
+  ).toBeInTheDocument();
+});
+
+test('shows empty states for explicit references and similar knowledge independently', () => {
+  render(
+    <RightSidebar
+      activeDocument={createDocument({
+        id: 'doc-current',
+        title: '当前文档',
+      })}
       activeQuickNote={null}
       activeFolder={null}
       activeSpace={null}
@@ -317,7 +600,11 @@ test('shows a unified empty state when the active document has no references', (
     />
   );
 
-  expect(screen.getByText('当前文档还没有关联引用')).toBeInTheDocument();
-  expect(screen.queryByText('提及文档')).not.toBeInTheDocument();
-  expect(screen.queryByText('被提及于')).not.toBeInTheDocument();
+  openWikiTab();
+
+  expect(screen.getByText('当前文稿还没有引用或提及')).toBeInTheDocument();
+  expect(screen.getByText('暂未发现相关主题')).toBeInTheDocument();
+  expect(screen.getByText('暂未发现原文线索')).toBeInTheDocument();
+  expect(screen.queryByText('当前文档还没有上下文引用')).not.toBeInTheDocument();
+  expect(screen.queryByText('暂未发现可推荐的关联')).not.toBeInTheDocument();
 });

@@ -69,7 +69,7 @@ test('shows sqlite runtime status when running through the desktop bridge', asyn
   window.workKnowlage = {
     ...createFallbackDesktopApi(),
     meta: {
-      version: '0.1.0',
+      version: '0.2.0',
       runtime: 'electron-sqlite',
       persistence: 'disk',
       storageLabel: 'SQLite 本地数据库',
@@ -157,6 +157,12 @@ test('refreshes document backlinks from persistence when reopening a document', 
   render(<App />);
 
   await waitFor(() => {
+    expect(screen.getByRole('button', { name: /^Wiki/ })).toBeInTheDocument();
+  });
+
+  await clickAsync(screen.getByRole('button', { name: /^Wiki/ }));
+
+  await waitFor(() => {
     expect(screen.getByRole('button', { name: '打开来源文档 架构设计' })).toBeInTheDocument();
   });
 
@@ -183,6 +189,12 @@ test('opens a backlink source document and focuses the referenced block', async 
   render(<App />);
 
   await waitFor(() => {
+    expect(screen.getByRole('button', { name: /^Wiki/ })).toBeInTheDocument();
+  });
+
+  await clickAsync(screen.getByRole('button', { name: /^Wiki/ }));
+
+  await waitFor(() => {
     expect(screen.getByRole('button', { name: '打开来源文档 架构设计' })).toBeInTheDocument();
   });
 
@@ -196,8 +208,30 @@ test('opens a backlink source document and focuses the referenced block', async 
     const focusedBlockContent = focusedBlock?.querySelector('.wk-block-focus-target-content') as HTMLElement | null;
     expect(focusedBlock).toBeTruthy();
     expect(
-      focusedBlock?.classList.contains('wk-block-focus-target') ||
-      focusedBlockContent?.classList.contains('wk-block-focus-target-content')
+      focusedBlockContent?.classList.contains('wk-block-focus-target-content') ||
+      focusedBlock?.querySelector('.wk-editor-search-match-active') !== null
     ).toBe(true);
   }, { timeout: 5000 });
+}, 10000);
+
+test('opens a block-level workspace search result and focuses the matching block', async () => {
+  render(<App />);
+
+  const searchInput = await screen.findByRole('textbox', { name: '搜索工作区' });
+  fireEvent.change(searchInput, { target: { value: '信息辅助' } });
+
+  const blockResultButton = await screen.findByRole('button', { name: '打开片段 架构设计' });
+  await clickAsync(blockResultButton);
+
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: '架构设计' })).toBeInTheDocument();
+    const focusedBlock = screen
+      .getByTestId('center-pane')
+      .querySelector('[data-id="section-arch-copy"]') as HTMLElement | null;
+    expect(focusedBlock).toBeTruthy();
+    const activeMatch = focusedBlock?.querySelector('.wk-editor-search-match-active') as HTMLElement | null;
+    expect(activeMatch).toBeTruthy();
+    expect(activeMatch).toHaveTextContent('信息辅助');
+    expect(searchInput).toHaveValue('');
+  });
 }, 10000);

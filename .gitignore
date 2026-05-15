@@ -5,3 +5,8 @@ release
 coverage
 *.log
 *.tsbuildinfo
+.scratch/
+.context/
+.playwright-cli/
+output/
+src/test_*.js

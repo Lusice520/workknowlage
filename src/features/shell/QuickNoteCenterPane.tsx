@@ -7,10 +7,11 @@ import {
   fromDocumentToInitialBlocks,
   kbSchema,
 } from '../../shared/editor';
+import { NumberedListHydrationExtension } from '../../shared/editor/numberedListHydrationExtension';
 import { getQuickNoteTitle } from '../../shared/lib/quickNotes';
+import { cacheQuickNoteRecord, prefetchQuickNoteRecord } from '../../shared/lib/quickNoteRecords';
 import type { QuickNoteRecord } from '../../shared/types/workspace';
 import { useEditorPersistence, type EditorSaveStatus } from '../editor-host/useEditorPersistence';
-import { cacheQuickNoteRecord, prefetchQuickNoteRecord } from './quickNoteCache';
 
 interface QuickNoteCenterPaneProps {
   noteDate: string;
@@ -89,7 +90,7 @@ export function QuickNoteCenterPane({
   const editor = useCreateBlockNote({
     schema: kbSchema,
     dictionary: zh,
-    disableExtensions: ['tableHandles'],
+    extensions: [NumberedListHydrationExtension],
     initialContent: initialBlocks,
   }, [note?.id ?? noteDate]);
 

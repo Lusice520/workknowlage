@@ -59,6 +59,14 @@ const normalizeExportAssetUrl = (value: unknown) => {
 
 const isListType = (type: string) => type === 'bulletListItem' || type === 'numberedListItem';
 
+const renderMarkdownCodeBlock = (block: any) => {
+  const rawLanguage = sanitizeCssValue(block?.props?.language);
+  const language = rawLanguage && rawLanguage !== 'text' ? rawLanguage : '';
+  const code = typeof block?.content === 'string' ? block.content : extractInlineText(block?.content);
+  const fence = code.includes('```') ? '````' : '```';
+  return `${fence}${language}\n${code}\n${fence}`;
+};
+
 const parseRichTableRows = (rawData: unknown) => {
   if (!rawData) {
     return [];
@@ -418,6 +426,8 @@ export const toMarkdownFromBlocks = (blocks: unknown, depth = 0): string => {
       const caption = String(block?.props?.caption || '').trim();
       const alt = caption || '图片';
       lines.push(src ? `![${alt}](${src})` : alt);
+    } else if (type === 'codeBlock') {
+      lines.push(renderMarkdownCodeBlock(block));
     } else if (type === 'richTable') {
       const rows = parseRichTableRows(block?.props?.data);
       if (rows.length > 0) {

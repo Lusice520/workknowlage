@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { EditorHostFocusDiagnostic } from '../features/editor-host/EditorHost';
 import { AppShell } from '../features/shell/AppShell';
-import { prefetchQuickNoteRecord } from '../features/shell/quickNoteCache';
+import { prefetchQuickNoteRecord } from '../shared/lib/quickNoteRecords';
 import { getActiveDocument, getActiveSpace, getFolderById } from '../shared/lib/workspaceSelectors';
 import { getWorkKnowlageApi, getWorkKnowlageRuntimeStatus } from '../shared/lib/workKnowlageApi';
-import type { TrashItemRecord, WorkspaceSearchResultRecord } from '../shared/types/preload';
+import type {
+  DataToolActionDetailItem,
+  DataToolActionResult,
+  TrashItemRecord,
+  WorkspaceSearchResultRecord,
+} from '../shared/types/preload';
 import type {
   DocumentFocusTarget,
   DocumentNavigationTarget,
@@ -13,17 +19,24 @@ import { useDocumentShare } from './useDocumentShare';
 import { useDocumentExport } from './useDocumentExport';
 import { useWorkspaceSearch } from './useWorkspaceSearch';
 import { useWorkspaceSession } from './useWorkspaceSession';
+import { WorkspaceSessionContextProvider, type WorkspaceSessionContextValue } from './contexts/WorkspaceSessionContext';
+import { SearchContextProvider } from './contexts/SearchContext';
+import { ShareContextProvider } from './contexts/ShareContext';
+import { ExportContextProvider } from './contexts/ExportContext';
+import { DataToolsContextProvider } from './contexts/DataToolsContext';
 
 export default function App() {
   const runtimeStatus = getWorkKnowlageRuntimeStatus();
   const session = useWorkspaceSession(runtimeStatus);
   const [dataToolsFeedback, setDataToolsFeedback] = useState<string | null>(null);
+  const [dataToolsDetails, setDataToolsDetails] = useState<DataToolActionDetailItem[]>([]);
   const [runningDataTool, setRunningDataTool] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [trashItems, setTrashItems] = useState<TrashItemRecord[]>([]);
   const [activeQuickNote, setActiveQuickNote] = useState<QuickNoteRecord | null>(null);
   const [documentFocusTarget, setDocumentFocusTarget] = useState<DocumentFocusTarget | null>(null);
   const [activeDocumentContentSnapshotGetter, setActiveDocumentContentSnapshotGetter] = useState<(() => string) | null>(null);
+  const [documentNavigationFeedback, setDocumentNavigationFeedback] = useState<string | null>(null);
   const documentFocusRequestKeyRef = useRef(0);
   const search = useWorkspaceSearch({
     activeSpaceId: session.workspaceState?.activeSpaceId,
@@ -103,6 +116,20 @@ export default function App() {
     setActiveDocumentContentSnapshotGetter(() => () => activeDocument?.contentJson ?? '[]');
   }, [activeDocument?.contentJson, activeDocument?.id]);
 
+  useEffect(() => {
+    if (!documentNavigationFeedback) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDocumentNavigationFeedback(null);
+    }, 3600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [documentNavigationFeedback]);
+
   if (session.loading || !workspaceState) {
     return (
       <main className="flex h-screen items-center justify-center bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0]">
@@ -137,6 +164,8 @@ export default function App() {
       setDocumentFocusTarget({
         documentId: target.documentId,
         blockId: target.blockId,
+        fallbackText: target.fallbackText,
+        highlightQuery: target.highlightQuery,
         requestKey: documentFocusRequestKeyRef.current,
       });
     } else {
@@ -146,7 +175,22 @@ export default function App() {
     void session.openDocument(target.documentId, options);
   };
 
+  const handleDocumentFocusDiagnostic = (diagnostic: EditorHostFocusDiagnostic) => {
+    setDocumentNavigationFeedback(diagnostic.message);
+  };
+
+  const handleDocumentFocusTargetConsumed = (requestKey: number) => {
+    setDocumentFocusTarget((current) => {
+      if (!current || current.requestKey !== requestKey) {
+        return current;
+      }
+
+      return null;
+    });
+  };
+
   const handleSelectSearchResult = (result: WorkspaceSearchResultRecord) => {
+    const nextHighlightQuery = search.searchQuery.trim();
     search.clearSearch();
 
     if (result.kind === 'quick-note' && result.noteDate) {
@@ -155,6 +199,23 @@ export default function App() {
     }
 
     const nextDocumentId = result.documentId ?? result.id;
+    if (result.kind === 'document-block' && result.documentId && result.blockId) {
+      handleOpenDocumentTarget(
+        {
+          documentId: result.documentId,
+          blockId: result.blockId,
+          fallbackText: result.fallbackText,
+          highlightQuery: nextHighlightQuery || undefined,
+        },
+        result.folderId
+          ? {
+              ensureExpandedFolderIds: [result.folderId],
+            }
+          : undefined,
+      );
+      return;
+    }
+
     if (result.folderId) {
       handleOpenDocument(nextDocumentId, {
         ensureExpandedFolderIds: [result.folderId],
@@ -200,7 +261,7 @@ export default function App() {
 
   const runDataTool = async (
     label: string,
-    action: () => Promise<{ message: string } | null | undefined> | undefined,
+    action: () => Promise<DataToolActionResult | null | undefined> | undefined,
     options: {
       reloadWorkspace?: boolean;
       clearSearch?: boolean;
@@ -220,8 +281,10 @@ export default function App() {
         search.clearSearch();
       }
       setDataToolsFeedback(result?.message ?? `${label}已完成`);
+      setDataToolsDetails(result?.details ?? []);
     } catch (error) {
       setDataToolsFeedback(error instanceof Error ? error.message : `${label}失败`);
+      setDataToolsDetails([]);
     } finally {
       setRunningDataTool(null);
     }
@@ -253,6 +316,10 @@ export default function App() {
 
   const handleRebuildSearchIndex = async () => {
     await runDataTool('重建搜索索引', () => getWorkKnowlageApi().maintenance?.rebuildSearchIndex());
+  };
+
+  const handleInspectDocumentContentHealth = async () => {
+    await runDataTool('检查文稿格式', () => getWorkKnowlageApi().maintenance?.inspectDocumentContentHealth());
   };
 
   const handleCleanupOrphanAttachments = async () => {
@@ -311,82 +378,112 @@ export default function App() {
     await loadTrashItems(activeSpaceId);
   };
 
+  const workspaceSessionValue: WorkspaceSessionContextValue = {
+    activeDocument,
+    activeQuickNote,
+    activeQuickNoteDate: session.activeQuickNoteDate,
+    activeFolder,
+    activeSpace,
+    state: workspaceState,
+    editingId: session.editingId,
+    quickNoteRefreshKey: session.quickNoteRefreshKey,
+    selectedQuickNoteDate: session.selectedQuickNoteDate,
+    documentFocusTarget,
+    trashItems,
+    onSelectDocument: handleOpenDocument,
+    onSelectCollectionView: session.selectCollectionView,
+    onSelectQuickNoteDate: session.selectQuickNoteDate,
+    onToggleFolder: session.toggleFolder,
+    onCreateDocument: session.createDocument,
+    onCreateFolder: session.createFolder,
+    onMoveFolder: session.moveFolder,
+    onMoveFolderToSpace: session.moveFolderToSpace,
+    onRenameFolder: session.renameFolder,
+    onRenameDocument: session.renameDocument,
+    onMoveDocument: session.moveDocument,
+    onMoveDocumentToSpace: session.moveDocumentToSpace,
+    onStartEditing: session.startEditing,
+    onCancelEditing: session.cancelEditing,
+    onDeleteDocument: session.deleteDocument,
+    onDeleteFolder: session.deleteFolder,
+    onCreateSpace: handleCreateSpace,
+    onRenameSpace: session.renameSpace,
+    onDeleteSpace: handleDeleteSpace,
+    onSwitchSpace: handleSwitchSpace,
+    onOpenTrash: handleOpenTrash,
+    onSaveDocumentContent: session.saveDocumentContent,
+    onSaveQuickNoteContent: handleSaveQuickNoteContent,
+    onCaptureQuickNote: handleCaptureQuickNote,
+    onUploadFiles: session.uploadFiles,
+    onUploadQuickNoteFiles: session.uploadQuickNoteFiles,
+    onSetDocumentFavorite: session.setDocumentFavorite,
+    onRestoreTrashItem: handleRestoreTrashItem,
+    onDeleteTrashItem: handleDeleteTrashItem,
+    onEmptyTrash: handleEmptyTrash,
+    onActiveDocumentContentSnapshotReady: handleActiveDocumentContentSnapshotReady,
+    onDocumentFocusDiagnostic: handleDocumentFocusDiagnostic,
+    onDocumentFocusTargetConsumed: handleDocumentFocusTargetConsumed,
+    onAddTagToDocument: session.addTagToDocument,
+    onRemoveTagFromDocument: session.removeTagFromDocument,
+    onOpenBacklinkDocument: handleOpenDocumentTarget,
+  };
+
+  const searchValue = {
+    searchQuery: search.searchQuery,
+    searchResults: search.searchResults,
+    searchLoading: search.searchLoading,
+    onSearchQueryChange: search.setSearchQuery,
+    onSelectSearchResult: handleSelectSearchResult,
+  };
+
+  const shareValue = {
+    shareInfo: share.shareInfo ? { token: share.shareInfo.token, url: share.shareInfo.publicUrl } : null,
+    shareBusy: share.shareBusy,
+    shareLoading: share.shareLoading,
+    shareStatusText: share.shareStatusText,
+    onShareDocument: share.shareDocument,
+    onRegenerateShareDocument: share.regenerateShareDocument,
+    onDisableShareDocument: share.disableShareDocument,
+  };
+
+  const exportValue = {
+    exportBusy: exportState.exportBusy,
+    exportStatusText: exportState.exportStatusText,
+    onExportMarkdown: exportState.exportMarkdown,
+    onExportPdf: exportState.exportPdf,
+    onExportWord: exportState.exportWord,
+  };
+
+  const dataToolsValue = {
+    runtimeStatus,
+    storageInfo: session.storageInfo,
+    persistenceFeedback: session.persistenceFeedback,
+    lastPersistedAt: session.lastPersistedAt,
+    dataToolsFeedback,
+    dataToolsDetails,
+    runningDataTool,
+    settingsOpen,
+    onOpenSettings: () => setSettingsOpen(true),
+    onCloseSettings: () => setSettingsOpen(false),
+    onOpenDataDirectory: handleOpenDataDirectory,
+    onCreateBackup: handleCreateBackup,
+    onRestoreBackup: handleRestoreBackup,
+    onRebuildSearchIndex: handleRebuildSearchIndex,
+    onInspectDocumentContentHealth: handleInspectDocumentContentHealth,
+    onCleanupOrphanAttachments: handleCleanupOrphanAttachments,
+  };
+
   return (
-    <AppShell
-      activeDocument={activeDocument}
-      activeQuickNote={activeQuickNote}
-      activeQuickNoteDate={session.activeQuickNoteDate}
-      activeFolder={activeFolder}
-      activeSpace={activeSpace}
-      state={workspaceState}
-      editingId={session.editingId}
-      documentFocusTarget={documentFocusTarget}
-      onSaveQuickNoteContent={handleSaveQuickNoteContent}
-      onCaptureQuickNote={handleCaptureQuickNote}
-      onSaveDocumentContent={session.saveDocumentContent}
-      onUploadFiles={session.uploadFiles}
-      onUploadQuickNoteFiles={session.uploadQuickNoteFiles}
-      onShareDocument={share.shareDocument}
-      onRegenerateShareDocument={share.regenerateShareDocument}
-      onDisableShareDocument={share.disableShareDocument}
-      onExportMarkdown={exportState.exportMarkdown}
-      onExportPdf={exportState.exportPdf}
-      onExportWord={exportState.exportWord}
-      exportBusy={exportState.exportBusy}
-      exportStatusText={exportState.exportStatusText}
-      shareInfo={share.shareInfo ? { token: share.shareInfo.token, url: share.shareInfo.publicUrl } : null}
-      shareBusy={share.shareBusy}
-      shareLoading={share.shareLoading}
-      shareStatusText={share.shareStatusText}
-      runtimeStatus={runtimeStatus}
-      storageInfo={session.storageInfo}
-      persistenceFeedback={session.persistenceFeedback}
-      lastPersistedAt={session.lastPersistedAt}
-      dataToolsFeedback={dataToolsFeedback}
-      runningDataTool={runningDataTool}
-      trashItems={trashItems}
-      settingsOpen={settingsOpen}
-      quickNoteRefreshKey={session.quickNoteRefreshKey}
-      searchQuery={search.searchQuery}
-      searchResults={search.searchResults}
-      searchLoading={search.searchLoading}
-      onSelectDocument={handleOpenDocument}
-      onSelectCollectionView={session.selectCollectionView}
-      onSearchQueryChange={search.setSearchQuery}
-      onSelectSearchResult={handleSelectSearchResult}
-      onSelectQuickNoteDate={session.selectQuickNoteDate}
-      selectedQuickNoteDate={session.selectedQuickNoteDate}
-      onToggleFolder={session.toggleFolder}
-      onCreateDocument={session.createDocument}
-      onCreateFolder={session.createFolder}
-      onMoveFolder={session.moveFolder}
-      onRenameFolder={session.renameFolder}
-      onRenameDocument={session.renameDocument}
-      onMoveDocument={session.moveDocument}
-      onStartEditing={session.startEditing}
-      onCancelEditing={session.cancelEditing}
-      onDeleteDocument={session.deleteDocument}
-      onDeleteFolder={session.deleteFolder}
-      onCreateSpace={handleCreateSpace}
-      onRenameSpace={session.renameSpace}
-      onDeleteSpace={handleDeleteSpace}
-      onSwitchSpace={handleSwitchSpace}
-      onOpenDataDirectory={handleOpenDataDirectory}
-      onCreateBackup={handleCreateBackup}
-      onRestoreBackup={handleRestoreBackup}
-      onRebuildSearchIndex={handleRebuildSearchIndex}
-      onCleanupOrphanAttachments={handleCleanupOrphanAttachments}
-      onOpenTrash={handleOpenTrash}
-      onRestoreTrashItem={handleRestoreTrashItem}
-      onDeleteTrashItem={handleDeleteTrashItem}
-      onEmptyTrash={handleEmptyTrash}
-      onOpenSettings={() => setSettingsOpen(true)}
-      onCloseSettings={() => setSettingsOpen(false)}
-      onAddTagToDocument={session.addTagToDocument}
-      onRemoveTagFromDocument={session.removeTagFromDocument}
-      onSetDocumentFavorite={session.setDocumentFavorite}
-      onOpenBacklinkDocument={handleOpenDocumentTarget}
-      onActiveDocumentContentSnapshotReady={handleActiveDocumentContentSnapshotReady}
-    />
+    <WorkspaceSessionContextProvider value={workspaceSessionValue}>
+      <SearchContextProvider value={searchValue}>
+        <ShareContextProvider value={shareValue}>
+          <ExportContextProvider value={exportValue}>
+            <DataToolsContextProvider value={dataToolsValue}>
+              <AppShell documentNavigationFeedback={documentNavigationFeedback} />
+            </DataToolsContextProvider>
+          </ExportContextProvider>
+        </ShareContextProvider>
+      </SearchContextProvider>
+    </WorkspaceSessionContextProvider>
   );
 }

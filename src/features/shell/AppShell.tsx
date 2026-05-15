@@ -1,178 +1,106 @@
-import type { EditorHostShareInfo } from '../editor-host/EditorHost';
-import type { WorkKnowlageRuntimeStatus } from '../../shared/lib/workKnowlageApi';
-import type {
-  TrashItemRecord,
-  WorkKnowlageStorageInfo,
-  WorkspaceSearchResultRecord,
-} from '../../shared/types/preload';
+import { useEffect, useState } from 'react';
+import { useWorkspaceSessionContext } from '../../app/contexts/WorkspaceSessionContext';
+import { useSearchContext } from '../../app/contexts/SearchContext';
+import { useShareContext } from '../../app/contexts/ShareContext';
+import { useExportContext } from '../../app/contexts/ExportContext';
+import { useDataToolsContext } from '../../app/contexts/DataToolsContext';
+import { useSidebarAssociations } from '../../app/useSidebarAssociations';
 import { LeftSidebar } from './LeftSidebar';
 import { CenterPane } from './CenterPane';
 import { RightSidebar } from './RightSidebar';
+import { MoveToSpaceModal } from './MoveToSpaceModal';
 import { SettingsModal } from './SettingsModal';
-import type {
-  DocumentFocusTarget,
-  DocumentNavigationTarget,
-  DocumentRecord,
-  FolderNode,
-  QuickNoteRecord,
-  Space,
-  WorkspaceCollectionView,
-  WorkspaceState,
-} from '../../shared/types/workspace';
 
 interface AppShellProps {
-  activeDocument: DocumentRecord | null;
-  activeQuickNote: QuickNoteRecord | null;
-  activeQuickNoteDate: string | null;
-  activeFolder: FolderNode | null;
-  activeSpace: Space | null;
-  state: WorkspaceState;
-  editingId: string | null;
-  documentFocusTarget?: DocumentFocusTarget | null;
-  onSaveDocumentContent: (documentId: string, contentJson: string) => Promise<unknown>;
-  onSaveQuickNoteContent: (noteDate: string, contentJson: string) => Promise<QuickNoteRecord>;
-  onCaptureQuickNote: (noteDate: string) => Promise<unknown>;
-  onUploadFiles: (documentId: string, files: File[]) => Promise<string[]>;
-  onUploadQuickNoteFiles: (quickNoteId: string, files: File[]) => Promise<string[]>;
-  onShareDocument: (documentId: string, contentJson: string) => Promise<void> | void;
-  onRegenerateShareDocument: (documentId: string, contentJson: string) => Promise<void> | void;
-  onDisableShareDocument: (documentId: string) => Promise<void> | void;
-  onExportMarkdown: () => Promise<void> | void;
-  onExportPdf: () => Promise<void> | void;
-  onExportWord: () => Promise<void> | void;
-  exportBusy: boolean;
-  exportStatusText?: string | null;
-  onActiveDocumentContentSnapshotReady?: (getContentJson: () => string) => void;
-  shareInfo?: EditorHostShareInfo | null;
-  shareBusy?: boolean;
-  shareLoading?: boolean;
-  shareStatusText?: string | null;
-  runtimeStatus: WorkKnowlageRuntimeStatus;
-  storageInfo?: WorkKnowlageStorageInfo | null;
-  persistenceFeedback: string;
-  lastPersistedAt?: string | null;
-  dataToolsFeedback?: string | null;
-  runningDataTool?: string | null;
-  trashItems: TrashItemRecord[];
-  settingsOpen: boolean;
-  quickNoteRefreshKey?: number;
-  selectedQuickNoteDate: string;
-  searchQuery: string;
-  searchResults: WorkspaceSearchResultRecord[];
-  searchLoading: boolean;
-  onSelectDocument: (documentId: string) => void;
-  onSelectCollectionView: (view: Exclude<WorkspaceCollectionView, 'tree'>) => void;
-  onSearchQueryChange: (query: string) => void;
-  onSelectSearchResult: (result: WorkspaceSearchResultRecord) => void;
-  onSelectQuickNoteDate: (dateKey: string) => void;
-  onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
-  onCreateFolder: (parentId: string | null) => Promise<void>;
-  onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
-  onRenameFolder: (folderId: string, newName: string) => Promise<void>;
-  onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
-  onMoveDocument: (documentId: string, targetFolderId: string | null) => Promise<void>;
-  onStartEditing: (id: string) => void;
-  onCancelEditing: () => void;
-  onDeleteDocument: (documentId: string) => Promise<void>;
-  onDeleteFolder: (folderId: string) => Promise<void>;
-  onCreateSpace: (name: string) => Promise<void>;
-  onRenameSpace: (spaceId: string, newName: string) => Promise<void>;
-  onDeleteSpace: (spaceId: string) => Promise<void>;
-  onSwitchSpace: (spaceId: string) => Promise<void>;
-  onOpenDataDirectory: () => Promise<void>;
-  onCreateBackup: () => Promise<void>;
-  onRestoreBackup: () => Promise<void>;
-  onRebuildSearchIndex: () => Promise<void>;
-  onCleanupOrphanAttachments: () => Promise<void>;
-  onOpenTrash: () => Promise<void> | void;
-  onRestoreTrashItem: (trashRootId: string) => Promise<void> | void;
-  onDeleteTrashItem: (trashRootId: string) => Promise<void> | void;
-  onEmptyTrash: () => Promise<void> | void;
-  onOpenSettings: () => Promise<void> | void;
-  onCloseSettings: () => Promise<void> | void;
-  onAddTagToDocument: (documentId: string, label: string) => Promise<void>;
-  onRemoveTagFromDocument: (documentId: string, tagId: string) => Promise<void>;
-  onSetDocumentFavorite: (documentId: string, isFavorite: boolean) => Promise<void>;
-  onOpenBacklinkDocument: (target: DocumentNavigationTarget) => void;
+  documentNavigationFeedback?: string | null;
 }
 
-export function AppShell({
-  activeDocument,
-  activeQuickNote,
-  activeQuickNoteDate,
-  activeFolder,
-  activeSpace,
-  state,
-  editingId,
-  documentFocusTarget,
-  onSaveDocumentContent,
-  onSaveQuickNoteContent,
-  onCaptureQuickNote,
-  onUploadFiles,
-  onUploadQuickNoteFiles,
-  onShareDocument,
-  onRegenerateShareDocument,
-  onDisableShareDocument,
-  onExportMarkdown,
-  onExportPdf,
-  onExportWord,
-  exportBusy,
-  exportStatusText,
-  onActiveDocumentContentSnapshotReady,
-  shareInfo,
-  shareBusy,
-  shareLoading,
-  shareStatusText,
-  runtimeStatus,
-  storageInfo,
-  persistenceFeedback,
-  lastPersistedAt,
-  dataToolsFeedback,
-  runningDataTool,
-  trashItems,
-  settingsOpen,
-  quickNoteRefreshKey,
-  selectedQuickNoteDate,
-  searchQuery,
-  searchResults,
-  searchLoading,
-  onSelectDocument,
-  onSelectCollectionView,
-  onSearchQueryChange,
-  onSelectSearchResult,
-  onSelectQuickNoteDate,
-  onToggleFolder,
-  onCreateDocument,
-  onCreateFolder,
-  onMoveFolder,
-  onRenameFolder,
-  onRenameDocument,
-  onMoveDocument,
-  onStartEditing,
-  onCancelEditing,
-  onDeleteDocument,
-  onDeleteFolder,
-  onCreateSpace,
-  onRenameSpace,
-  onDeleteSpace,
-  onSwitchSpace,
-  onOpenDataDirectory,
-  onCreateBackup,
-  onRestoreBackup,
-  onRebuildSearchIndex,
-  onCleanupOrphanAttachments,
-  onOpenTrash,
-  onRestoreTrashItem,
-  onDeleteTrashItem,
-  onEmptyTrash,
-  onOpenSettings,
-  onCloseSettings,
-  onAddTagToDocument,
-  onRemoveTagFromDocument,
-  onSetDocumentFavorite,
-  onOpenBacklinkDocument,
-}: AppShellProps) {
+export function AppShell({ documentNavigationFeedback }: AppShellProps) {
+  const ws = useWorkspaceSessionContext();
+  const search = useSearchContext();
+  const share = useShareContext();
+  const exp = useExportContext();
+  const dt = useDataToolsContext();
+
+  const [moveToSpaceToast, setMoveToSpaceToast] = useState<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [focusedOutlineItemId, setFocusedOutlineItemId] = useState<string | null>(null);
+  const [moveToSpaceRequest, setMoveToSpaceRequest] = useState<{
+    kind: 'document' | 'folder';
+    id: string;
+    label: string;
+  } | null>(null);
+  const [moveToSpaceSubmitting, setMoveToSpaceSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!moveToSpaceToast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMoveToSpaceToast(null);
+    }, moveToSpaceToast.tone === 'error' ? 3200 : 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [moveToSpaceToast]);
+
+  useEffect(() => {
+    setFocusedOutlineItemId(null);
+  }, [ws.activeDocument?.id]);
+
+  const associationState = useSidebarAssociations({
+    activeDocument: ws.activeDocument,
+    documents: ws.state.seed.documents,
+    folders: ws.state.seed.folders,
+    focusedOutlineItemId,
+  });
+
+  const handleCloseMoveToSpace = () => {
+    if (moveToSpaceSubmitting) {
+      return;
+    }
+
+    setMoveToSpaceRequest(null);
+  };
+
+  const handleConfirmMoveToSpace = async (targetSpaceId: string) => {
+    if (!moveToSpaceRequest || moveToSpaceSubmitting) {
+      return;
+    }
+
+    const currentRequest = moveToSpaceRequest;
+    const targetSpaceName = ws.state.seed.spaces.find((space) => space.id === targetSpaceId)?.name ?? '目标空间';
+
+    setMoveToSpaceSubmitting(true);
+    setMoveToSpaceToast(null);
+
+    try {
+      if (currentRequest.kind === 'document') {
+        await ws.onMoveDocumentToSpace(currentRequest.id, targetSpaceId);
+      } else {
+        await ws.onMoveFolderToSpace(currentRequest.id, targetSpaceId);
+      }
+
+      setMoveToSpaceRequest(null);
+      setMoveToSpaceToast({
+        tone: 'success',
+        message: `已移动到「${targetSpaceName}」`,
+      });
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? error.message : '请稍后再试';
+      setMoveToSpaceToast({
+        tone: 'error',
+        message: `移动失败：${detail}`,
+      });
+    } finally {
+      setMoveToSpaceSubmitting(false);
+    }
+  };
+
   return (
     <main
       data-testid="app-shell"
@@ -186,98 +114,143 @@ export function AppShell({
       <div className="relative z-10 h-full">
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] gap-2">
           <LeftSidebar
-            activeSpace={activeSpace}
-            state={state}
-            editingId={editingId}
-            quickNoteRefreshKey={quickNoteRefreshKey}
-            selectedQuickNoteDate={selectedQuickNoteDate}
-            searchQuery={searchQuery}
-            searchResults={searchResults}
-            searchLoading={searchLoading}
-            onSelectDocument={onSelectDocument}
-            onSelectCollectionView={onSelectCollectionView}
-            onSearchQueryChange={onSearchQueryChange}
-            onSelectSearchResult={onSelectSearchResult}
-            onSelectQuickNoteDate={onSelectQuickNoteDate}
-            onToggleFolder={onToggleFolder}
-            onCreateDocument={onCreateDocument}
-            onCreateFolder={onCreateFolder}
-            onMoveFolder={onMoveFolder}
-            onRenameFolder={onRenameFolder}
-            onRenameDocument={onRenameDocument}
-            onMoveDocument={onMoveDocument}
-            onStartEditing={onStartEditing}
-            onCancelEditing={onCancelEditing}
-            onDeleteDocument={onDeleteDocument}
-            onDeleteFolder={onDeleteFolder}
-            onCreateSpace={onCreateSpace}
-            onRenameSpace={onRenameSpace}
-            onDeleteSpace={onDeleteSpace}
-            onSwitchSpace={onSwitchSpace}
-            onOpenTrash={onOpenTrash}
-            onOpenSettings={onOpenSettings}
+            activeSpace={ws.activeSpace}
+            state={ws.state}
+            editingId={ws.editingId}
+            quickNoteRefreshKey={ws.quickNoteRefreshKey}
+            selectedQuickNoteDate={ws.selectedQuickNoteDate}
+            searchQuery={search.searchQuery}
+            searchResults={search.searchResults}
+            searchLoading={search.searchLoading}
+            onSelectDocument={ws.onSelectDocument}
+            onSelectCollectionView={ws.onSelectCollectionView}
+            onSearchQueryChange={search.onSearchQueryChange}
+            onSelectSearchResult={search.onSelectSearchResult}
+            onSelectQuickNoteDate={ws.onSelectQuickNoteDate}
+            onToggleFolder={ws.onToggleFolder}
+            onCreateDocument={ws.onCreateDocument}
+            onCreateFolder={ws.onCreateFolder}
+            onMoveFolder={ws.onMoveFolder}
+            onRequestMoveFolderToSpace={(folderId, folderName) => {
+              setMoveToSpaceRequest({ kind: 'folder', id: folderId, label: folderName });
+            }}
+            onRenameFolder={ws.onRenameFolder}
+            onRenameDocument={ws.onRenameDocument}
+            onMoveDocument={ws.onMoveDocument}
+            onRequestMoveDocumentToSpace={(documentId, documentTitle) => {
+              setMoveToSpaceRequest({ kind: 'document', id: documentId, label: documentTitle });
+            }}
+            onStartEditing={ws.onStartEditing}
+            onCancelEditing={ws.onCancelEditing}
+            onDeleteDocument={ws.onDeleteDocument}
+            onDeleteFolder={ws.onDeleteFolder}
+            onCreateSpace={ws.onCreateSpace}
+            onRenameSpace={ws.onRenameSpace}
+            onDeleteSpace={ws.onDeleteSpace}
+            onSwitchSpace={ws.onSwitchSpace}
+            onOpenTrash={ws.onOpenTrash}
+            onOpenSettings={dt.onOpenSettings}
           />
           <CenterPane
-            activeDocument={activeDocument}
-            activeQuickNoteDate={activeQuickNoteDate}
-            selectedQuickNoteDate={selectedQuickNoteDate}
-            activeFolder={activeFolder}
-            activeSpace={activeSpace}
-            activeCollectionView={state.activeCollectionView ?? 'tree'}
-            documents={state.seed.documents}
-            folders={state.seed.folders}
-            trashItems={trashItems}
-            onSaveDocumentContent={onSaveDocumentContent}
-            onSaveQuickNoteContent={onSaveQuickNoteContent}
-            onCaptureQuickNote={onCaptureQuickNote}
-            onUploadFiles={onUploadFiles}
-            onUploadQuickNoteFiles={onUploadQuickNoteFiles}
-            onOpenDocument={onSelectDocument}
-            onSetDocumentFavorite={onSetDocumentFavorite}
-            onRestoreTrashItem={onRestoreTrashItem}
-            onDeleteTrashItem={onDeleteTrashItem}
-            onEmptyTrash={onEmptyTrash}
-            onShareDocument={onShareDocument}
-            onRegenerateShareDocument={onRegenerateShareDocument}
-            onDisableShareDocument={onDisableShareDocument}
-            onExportMarkdown={onExportMarkdown}
-            onExportPdf={onExportPdf}
-            onExportWord={onExportWord}
-            exportBusy={exportBusy}
-            exportStatusText={exportStatusText}
-            onActiveDocumentContentSnapshotReady={onActiveDocumentContentSnapshotReady}
-            shareInfo={shareInfo}
-            shareBusy={shareBusy}
-            shareLoading={shareLoading}
-            shareStatusText={shareStatusText}
-            documentFocusTarget={documentFocusTarget}
+            activeDocument={ws.activeDocument}
+            activeQuickNoteDate={ws.activeQuickNoteDate}
+            selectedQuickNoteDate={ws.selectedQuickNoteDate}
+            activeFolder={ws.activeFolder}
+            activeSpace={ws.activeSpace}
+            activeCollectionView={ws.state.activeCollectionView ?? 'tree'}
+            documents={ws.state.seed.documents}
+            folders={ws.state.seed.folders}
+            trashItems={ws.trashItems}
+            onSaveDocumentContent={ws.onSaveDocumentContent}
+            onSaveQuickNoteContent={ws.onSaveQuickNoteContent}
+            onCaptureQuickNote={ws.onCaptureQuickNote}
+            onUploadFiles={ws.onUploadFiles}
+            onUploadQuickNoteFiles={ws.onUploadQuickNoteFiles}
+            onOpenDocument={ws.onSelectDocument}
+            onSetDocumentFavorite={ws.onSetDocumentFavorite}
+            onRestoreTrashItem={ws.onRestoreTrashItem}
+            onDeleteTrashItem={ws.onDeleteTrashItem}
+            onEmptyTrash={ws.onEmptyTrash}
+            onShareDocument={share.onShareDocument}
+            onRegenerateShareDocument={share.onRegenerateShareDocument}
+            onDisableShareDocument={share.onDisableShareDocument}
+            onExportMarkdown={exp.onExportMarkdown}
+            onExportPdf={exp.onExportPdf}
+            onExportWord={exp.onExportWord}
+            exportBusy={exp.exportBusy}
+            exportStatusText={exp.exportStatusText}
+            onActiveDocumentContentSnapshotReady={ws.onActiveDocumentContentSnapshotReady}
+            shareInfo={share.shareInfo}
+            shareBusy={share.shareBusy}
+            shareLoading={share.shareLoading}
+            shareStatusText={share.shareStatusText}
+            documentFocusTarget={ws.documentFocusTarget}
+            onFocusDiagnostic={ws.onDocumentFocusDiagnostic}
+            onFocusTargetConsumed={ws.onDocumentFocusTargetConsumed}
           />
           <RightSidebar
-            activeDocument={activeDocument}
-            activeQuickNote={activeQuickNote}
-            activeFolder={activeFolder}
-            activeSpace={activeSpace}
-            onAddTagToDocument={onAddTagToDocument}
-            onRemoveTagFromDocument={onRemoveTagFromDocument}
-            onOpenBacklinkDocument={onOpenBacklinkDocument}
+            activeDocument={ws.activeDocument}
+            activeQuickNote={ws.activeQuickNote}
+            activeFolder={ws.activeFolder}
+            activeSpace={ws.activeSpace}
+            associationState={associationState}
+            focusedOutlineItemId={focusedOutlineItemId}
+            onAddTagToDocument={ws.onAddTagToDocument}
+            onFocusOutlineItem={setFocusedOutlineItemId}
+            onRemoveTagFromDocument={ws.onRemoveTagFromDocument}
+            onOpenBacklinkDocument={ws.onOpenBacklinkDocument}
           />
         </div>
       </div>
       <SettingsModal
-        open={settingsOpen}
-        runtimeStatus={runtimeStatus}
-        persistenceFeedback={persistenceFeedback}
-        storageInfo={storageInfo}
-        lastPersistedAt={lastPersistedAt}
-        dataToolsFeedback={dataToolsFeedback}
-        runningDataTool={runningDataTool}
-        onClose={onCloseSettings}
-        onOpenDataDirectory={onOpenDataDirectory}
-        onCreateBackup={onCreateBackup}
-        onRestoreBackup={onRestoreBackup}
-        onRebuildSearchIndex={onRebuildSearchIndex}
-        onCleanupOrphanAttachments={onCleanupOrphanAttachments}
+        open={dt.settingsOpen}
+        runtimeStatus={dt.runtimeStatus}
+        persistenceFeedback={dt.persistenceFeedback}
+        storageInfo={dt.storageInfo}
+        lastPersistedAt={dt.lastPersistedAt}
+        dataToolsFeedback={dt.dataToolsFeedback}
+        dataToolsDetails={dt.dataToolsDetails}
+        runningDataTool={dt.runningDataTool}
+        onClose={dt.onCloseSettings}
+        onOpenDataDirectory={dt.onOpenDataDirectory}
+        onCreateBackup={dt.onCreateBackup}
+        onRestoreBackup={dt.onRestoreBackup}
+        onRebuildSearchIndex={dt.onRebuildSearchIndex}
+        onInspectDocumentContentHealth={dt.onInspectDocumentContentHealth}
+        onCleanupOrphanAttachments={dt.onCleanupOrphanAttachments}
       />
+      <MoveToSpaceModal
+        open={moveToSpaceRequest !== null}
+        itemLabel={moveToSpaceRequest?.label ?? ''}
+        itemKind={moveToSpaceRequest?.kind ?? 'document'}
+        spaces={ws.state.seed.spaces}
+        currentSpaceId={ws.activeSpace?.id ?? null}
+        submitting={moveToSpaceSubmitting}
+        onClose={handleCloseMoveToSpace}
+        onConfirm={handleConfirmMoveToSpace}
+      />
+      {moveToSpaceToast ? (
+        <div
+          role={moveToSpaceToast.tone === 'error' ? 'alert' : 'status'}
+          aria-live={moveToSpaceToast.tone === 'error' ? 'assertive' : 'polite'}
+          className={`pointer-events-none absolute right-6 top-6 z-[60] max-w-sm rounded-[18px] border px-4 py-3 text-[13px] font-medium shadow-[0_18px_48px_rgba(15,23,42,0.14)] backdrop-blur ${
+            moveToSpaceToast.tone === 'error'
+              ? 'border-rose-200/80 bg-white/95 text-rose-700'
+              : 'border-emerald-200/80 bg-white/95 text-emerald-700'
+          }`}
+        >
+          {moveToSpaceToast.message}
+        </div>
+      ) : null}
+      {documentNavigationFeedback ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute right-6 top-24 z-[60] max-w-sm rounded-[18px] border border-amber-200/80 bg-white/95 px-4 py-3 text-[13px] font-medium text-amber-700 shadow-[0_18px_48px_rgba(15,23,42,0.14)] backdrop-blur"
+        >
+          {documentNavigationFeedback}
+        </div>
+      ) : null}
     </main>
   );
 }

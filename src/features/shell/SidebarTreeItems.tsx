@@ -1,5 +1,6 @@
 import { type DragEvent } from 'react';
 import {
+  ArrowRightLeft,
   ChevronDown,
   ChevronRight,
   Ellipsis,
@@ -23,13 +24,23 @@ import { SidebarActionMenu } from './SidebarActionMenu';
 import { SidebarInlineEditInput } from './SidebarInlineEditInput';
 
 const folderRowClass =
-  'group flex w-full items-center gap-1.5 rounded-[10px] px-2 py-1.5 transition-all duration-200';
+  'group flex w-full items-center rounded-[10px] px-2 py-1.5 transition-all duration-200';
 const documentRowClass =
-  'group flex w-full items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-all duration-200 relative';
+  'group flex w-full items-center rounded-[10px] px-2 py-1.5 transition-all duration-200 relative';
 const activeDocRowClass =
-  'bg-blue-50/60 text-blue-700 font-semibold before:absolute before:inset-y-1 before:left-[-6px] before:w-0.5 before:rounded-full before:bg-blue-500 before:content-[""]';
+  'bg-[rgba(238,243,255,0.96)] text-blue-700 shadow-[inset_0_0_0_1px_rgba(147,197,253,0.34)]';
 const inactiveDocRowClass =
   'text-slate-500 hover:bg-slate-100/50 hover:text-slate-800';
+const childTreeClass =
+  'relative ml-3 space-y-0.5 border-l border-slate-200/60 pl-2 pt-0.5 transition-all duration-300';
+const treeRowContentClass =
+  'grid min-w-0 flex-1 grid-cols-[16px_16px_minmax(0,1fr)] items-center gap-x-2';
+const treeChevronSlotClass =
+  'flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 transition-colors';
+const treeIconSlotClass =
+  'flex h-4 w-4 shrink-0 items-center justify-center';
+const treeLabelClass =
+  'truncate text-[12px] leading-[1.25] tracking-[0.01em]';
 const treeActionGroupClass =
   'flex shrink-0 items-center gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto';
 
@@ -46,9 +57,11 @@ interface DocumentTreeItemProps {
   onCreateDocument: (folderId: string | null) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
   onMoveDocument: (documentId: string, targetFolderId: string | null) => Promise<void>;
+  onRequestMoveDocumentToSpace: (documentId: string, documentTitle: string) => void;
   onStartEditing: (id: string) => void;
   onCancelEditing: () => void;
   onDeleteDocument: (documentId: string) => Promise<void>;
@@ -74,9 +87,11 @@ export function DocumentTreeItem({
   onCreateDocument,
   onCreateFolder,
   onMoveFolder,
+  onRequestMoveFolderToSpace,
   onRenameFolder,
   onRenameDocument,
   onMoveDocument,
+  onRequestMoveDocumentToSpace,
   onStartEditing,
   onCancelEditing,
   onDeleteDocument,
@@ -132,11 +147,11 @@ export function DocumentTreeItem({
           void onDocumentDrop(event, document.id);
         }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div className={treeRowContentClass}>
           <button
             type="button"
             aria-label={hasChildren ? `${document.title} ${isExpanded ? '折叠' : '展开'}` : `${document.title} 无子级`}
-            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 transition-colors ${
+            className={`${treeChevronSlotClass} ${
               hasChildren ? 'hover:bg-slate-200/60 hover:text-slate-600' : 'pointer-events-none opacity-0'
             }`}
             onClick={(event) => {
@@ -149,10 +164,12 @@ export function DocumentTreeItem({
           >
             {hasChildren ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
           </button>
-          <FileText
-            size={14}
-            className={`shrink-0 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-500'}`}
-          />
+          <span className={treeIconSlotClass}>
+            <FileText
+              size={14}
+              className={`shrink-0 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-500'}`}
+            />
+          </span>
           {isDocEditing ? (
             <SidebarInlineEditInput
               defaultValue={document.title}
@@ -161,7 +178,7 @@ export function DocumentTreeItem({
             />
           ) : (
             <span
-              className={`truncate text-[12px] leading-[1.25] tracking-[0.01em] ${isActive ? 'font-semibold' : 'font-medium'}`}
+              className={`${treeLabelClass} ${isActive ? 'font-semibold text-slate-700' : 'font-medium'}`}
               onDoubleClick={(event) => {
                 event.stopPropagation();
                 onStartEditing(document.id);
@@ -209,6 +226,11 @@ export function DocumentTreeItem({
                   onClick: () => onStartEditing(document.id),
                 },
                 {
+                  label: '移动到空间',
+                  icon: ArrowRightLeft,
+                  onClick: () => onRequestMoveDocumentToSpace(document.id, document.title),
+                },
+                {
                   label: '删除',
                   icon: Trash2,
                   destructive: true,
@@ -224,7 +246,7 @@ export function DocumentTreeItem({
         ) : null}
       </div>
       {hasChildren && isExpanded ? (
-        <div className="relative ml-[15px] space-y-0.5 border-l border-slate-200/60 pl-2.5 pt-0.5 transition-all duration-300">
+        <div className={childTreeClass}>
           {childFolders.map((childFolder) => (
             <FolderSection
               key={childFolder.id}
@@ -238,9 +260,11 @@ export function DocumentTreeItem({
               onCreateDocument={onCreateDocument}
               onCreateFolder={onCreateFolder}
               onMoveFolder={onMoveFolder}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
               onRenameFolder={onRenameFolder}
               onRenameDocument={onRenameDocument}
               onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
               onStartEditing={onStartEditing}
               onCancelEditing={onCancelEditing}
               onDeleteDocument={onDeleteDocument}
@@ -268,9 +292,11 @@ export function DocumentTreeItem({
               onCreateDocument={onCreateDocument}
               onCreateFolder={onCreateFolder}
               onMoveFolder={onMoveFolder}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
               onRenameFolder={onRenameFolder}
               onRenameDocument={onRenameDocument}
               onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
               onStartEditing={onStartEditing}
               onCancelEditing={onCancelEditing}
               onDeleteDocument={onDeleteDocument}
@@ -300,9 +326,11 @@ interface FolderSectionProps {
   onCreateDocument: (folderId: string | null) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
   onMoveDocument: (documentId: string, targetFolderId: string | null) => Promise<void>;
+  onRequestMoveDocumentToSpace: (documentId: string, documentTitle: string) => void;
   onStartEditing: (id: string) => void;
   onCancelEditing: () => void;
   onDeleteDocument: (documentId: string) => Promise<void>;
@@ -326,9 +354,11 @@ export function FolderSection({
   onCreateDocument,
   onCreateFolder,
   onMoveFolder,
+  onRequestMoveFolderToSpace,
   onRenameFolder,
   onRenameDocument,
   onMoveDocument,
+  onRequestMoveDocumentToSpace,
   onStartEditing,
   onCancelEditing,
   onDeleteDocument,
@@ -379,16 +409,18 @@ export function FolderSection({
           void onFolderDrop(event, folder.id);
         }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400 transition-transform group-hover:text-slate-600">
+        <div className={treeRowContentClass}>
+          <span className={`${treeChevronSlotClass} group-hover:text-slate-600`}>
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
-          <Folder
-            size={14}
-            className="shrink-0 text-amber-400 drop-shadow-sm transition-transform group-hover:scale-110"
-            fill="currentColor"
-            fillOpacity={0.2}
-          />
+          <span className={treeIconSlotClass}>
+            <Folder
+              size={14}
+              className="shrink-0 text-amber-400 drop-shadow-sm transition-transform group-hover:scale-110"
+              fill="currentColor"
+              fillOpacity={0.2}
+            />
+          </span>
           {isEditing ? (
             <SidebarInlineEditInput
               defaultValue={folder.name}
@@ -397,7 +429,7 @@ export function FolderSection({
             />
           ) : (
             <span
-              className="truncate text-[12px] font-medium leading-[1.25] tracking-[0.01em]"
+              className={`${treeLabelClass} font-medium`}
               onDoubleClick={(event) => {
                 event.stopPropagation();
                 onStartEditing(folder.id);
@@ -445,6 +477,11 @@ export function FolderSection({
                   onClick: () => onStartEditing(folder.id),
                 },
                 {
+                  label: '移动到空间',
+                  icon: ArrowRightLeft,
+                  onClick: () => onRequestMoveFolderToSpace(folder.id, folder.name),
+                },
+                {
                   label: '删除',
                   icon: Trash2,
                   destructive: true,
@@ -460,7 +497,7 @@ export function FolderSection({
         ) : null}
       </div>
       {isExpanded ? (
-        <div className="relative ml-[15px] space-y-0.5 border-l border-slate-200/60 pl-2.5 pt-0.5 transition-all duration-300">
+        <div className={childTreeClass}>
           {getChildFolders(state, folder.id).map((childFolder) => (
             <FolderSection
               key={childFolder.id}
@@ -474,9 +511,11 @@ export function FolderSection({
               onCreateDocument={onCreateDocument}
               onCreateFolder={onCreateFolder}
               onMoveFolder={onMoveFolder}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
               onRenameFolder={onRenameFolder}
               onRenameDocument={onRenameDocument}
               onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
               onStartEditing={onStartEditing}
               onCancelEditing={onCancelEditing}
               onDeleteDocument={onDeleteDocument}
@@ -504,9 +543,11 @@ export function FolderSection({
               onCreateDocument={onCreateDocument}
               onCreateFolder={onCreateFolder}
               onMoveFolder={onMoveFolder}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
               onRenameFolder={onRenameFolder}
               onRenameDocument={onRenameDocument}
               onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
               onStartEditing={onStartEditing}
               onCancelEditing={onCancelEditing}
               onDeleteDocument={onDeleteDocument}

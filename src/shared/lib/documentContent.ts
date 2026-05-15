@@ -2,9 +2,9 @@ import type { DocumentSection, OutlineItem } from '../types/workspace';
 
 const EMPTY_CONTENT_JSON = '[]';
 
-type JsonRecord = Record<string, unknown>;
+export type JsonRecord = Record<string, unknown>;
 
-const asRecord = (value: unknown): JsonRecord | null =>
+export const asRecord = (value: unknown): JsonRecord | null =>
   typeof value === 'object' && value !== null ? (value as JsonRecord) : null;
 
 const hasText = (value: unknown): value is string =>
@@ -13,7 +13,7 @@ const hasText = (value: unknown): value is string =>
 const stripLegacyHeadingPrefix = (title: string): string =>
   title.replace(/^\d+\.\s*/, '').trim();
 
-const parseContentArray = (contentJson: string | null | undefined): unknown[] => {
+export const parseContentArray = (contentJson: string | null | undefined): unknown[] => {
   if (typeof contentJson !== 'string' || contentJson.trim().length === 0) {
     return [];
   }

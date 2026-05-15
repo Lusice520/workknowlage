@@ -83,6 +83,10 @@ async function runSmoke() {
     spaceId: space.id,
     query: '搜索验证',
   });
+  const blockHits = searchRepo.searchWorkspace({
+    spaceId: space.id,
+    query: '验证标题',
+  });
   const noteHits = searchRepo.searchWorkspace({
     spaceId: space.id,
     query: '快速记录',
@@ -103,6 +107,7 @@ async function runSmoke() {
     spaceId: space.id,
     seedHit,
     firstPassHits,
+    blockHits,
     noteHits,
     persistedHits,
   };

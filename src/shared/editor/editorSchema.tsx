@@ -4,6 +4,7 @@ import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
 import { AlertCircle, Download, ExternalLink, FileText, Image as ImageIcon, Paperclip, Table2 } from 'lucide-react';
 import { createAlert } from './Alert';
 import { createReactBlockSpec, createReactInlineContentSpec } from './blocknoteReactNoComments';
+import { createKnowledgeBaseCodeBlock } from './KnowledgeBaseCodeBlock';
 import { createRichTable } from './RichTable';
 import { createBlockNoteSchema } from './blockNoteSchema';
 import { KB_IMAGE_PREVIEW_EVENT, IMAGE_EXT_REGEX } from './constants';
@@ -123,6 +124,7 @@ export const kbSchema = createBlockNoteSchema().extend({
     docMention: createDocumentMentionInlineContent,
   },
   blockSpecs: {
+    codeBlock: createKnowledgeBaseCodeBlock(),
     alert: createAlert(),
     richTable: createRichTable(),
     kbAttachment: createKbAttachmentBlock(),

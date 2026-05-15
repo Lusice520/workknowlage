@@ -185,6 +185,51 @@ function moveDocument(id, targetFolderId) {
   return getDocumentById(id);
 }
 
+function moveDocumentToSpace(id, targetSpaceId) {
+  const db = getDatabase();
+  const currentRow = db
+    .prepare('SELECT id, space_id AS spaceId FROM documents WHERE id = ? AND deleted_at IS NULL')
+    .get(id);
+  const targetSpace = db.prepare('SELECT id FROM spaces WHERE id = ?').get(targetSpaceId);
+
+  if (!currentRow || !targetSpace) {
+    throw new Error('Document move target is invalid.');
+  }
+
+  const { folderIds, documentIds } = collectTreePackageIds(db, 'document', id);
+  const moveTransaction = db.transaction(() => {
+    if (folderIds.length > 0) {
+      const folderPlaceholders = folderIds.map(() => '?').join(', ');
+      db.prepare(
+        `UPDATE folders
+         SET space_id = ?, updated_at = datetime('now')
+         WHERE id IN (${folderPlaceholders})`
+      ).run(targetSpaceId, ...folderIds);
+    }
+
+    if (documentIds.length > 0) {
+      const documentPlaceholders = documentIds.map(() => '?').join(', ');
+      db.prepare(
+        `UPDATE documents
+         SET space_id = ?, updated_at = datetime('now')
+         WHERE id IN (${documentPlaceholders})`
+      ).run(targetSpaceId, ...documentIds);
+    }
+
+    db.prepare(
+      "UPDATE documents SET folder_id = NULL, updated_at = datetime('now') WHERE id = ?"
+    ).run(id);
+  });
+
+  moveTransaction();
+
+  return {
+    sourceSpaceId: currentRow.spaceId,
+    targetSpaceId,
+    document: getDocumentById(id),
+  };
+}
+
 function trashDocument(id) {
   const db = getDatabase();
   const existing = getDocumentById(id);
@@ -322,6 +367,7 @@ module.exports = {
   createDocument,
   updateDocument,
   moveDocument,
+  moveDocumentToSpace,
   trashDocument,
   restoreDocumentTrashRoot,
   deleteDocumentTrashRoot,

@@ -18,7 +18,7 @@ describe('workspaceSelectors', () => {
 
   test('loads the requested space snapshot instead of always using the first space', async () => {
     window.workKnowlage = {
-      meta: { version: '0.1.0' },
+      meta: { version: '0.2.0' },
       spaces: {
         list: async () => [
           { id: 'space-alpha', name: 'Alpha', label: 'WORKSPACE' },
@@ -172,7 +172,7 @@ describe('workspaceSelectors', () => {
 
   test('loads root-level documents for the active space', async () => {
     window.workKnowlage = {
-      meta: { version: '0.1.0' },
+      meta: { version: '0.2.0' },
       spaces: {
         list: async () => [
           { id: 'space-bravo', name: 'Bravo', label: 'WORKSPACE' },
@@ -346,7 +346,7 @@ describe('workspaceSelectors', () => {
     });
 
     window.workKnowlage = {
-      meta: { version: '0.1.0' },
+      meta: { version: '0.2.0' },
       spaces: {
         list: async () => [{ id: 'space-bravo', name: 'Bravo', label: 'WORKSPACE' }],
         create: async () => ({ id: 'space-new', name: 'New', label: 'WORKSPACE' }),
@@ -446,7 +446,7 @@ describe('workspaceSelectors', () => {
     });
 
     window.workKnowlage = {
-      meta: { version: '0.1.0' },
+      meta: { version: '0.2.0' },
       workspace: {
         getSnapshot: async (spaceId: string) => ({
           folders: [{ id: 'folder-snapshot', spaceId, parentId: null, name: 'Snapshot Folder' }],

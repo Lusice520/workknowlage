@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Re-export only the BlockNote React modules we actually use so the app
 // doesn't pull in the package root bundle, which includes comment UI code.
 export type {
@@ -12,6 +13,7 @@ export { LinkToolbarController } from '../../../node_modules/@blocknote/react/sr
 export { SideMenuController } from '../../../node_modules/@blocknote/react/src/components/SideMenu/SideMenuController.js';
 export { SuggestionMenuController } from '../../../node_modules/@blocknote/react/src/components/SuggestionMenu/SuggestionMenuController.js';
 export { GridSuggestionMenuController } from '../../../node_modules/@blocknote/react/src/components/SuggestionMenu/GridSuggestionMenu/GridSuggestionMenuController.js';
+export { TableHandlesController } from '../../../node_modules/@blocknote/react/src/components/TableHandles/TableHandlesController.js';
 export { BasicTextStyleButton } from '../../../node_modules/@blocknote/react/src/components/FormattingToolbar/DefaultButtons/BasicTextStyleButton.js';
 export { ColorStyleButton } from '../../../node_modules/@blocknote/react/src/components/FormattingToolbar/DefaultButtons/ColorStyleButton.js';
 export { CreateLinkButton } from '../../../node_modules/@blocknote/react/src/components/FormattingToolbar/DefaultButtons/CreateLinkButton.js';
