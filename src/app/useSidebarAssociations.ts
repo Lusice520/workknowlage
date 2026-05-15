@@ -11,6 +11,7 @@ const EMPTY_SIDEBAR_ASSOCIATIONS: SidebarAssociationResult = {
   similarBlocks: [],
   suggestedLinks: [],
   textEvidence: [],
+  associatedDocuments: [],
   summary: {
     wikiAssociationCount: 0,
   },

@@ -353,6 +353,81 @@ describe('deriveSidebarAssociations', () => {
     expect(result.summary.wikiAssociationCount).toBe(1);
   });
 
+  test('aggregates semantic and text evidence under one associated document', () => {
+    const activeDocument = buildDocument({
+      id: 'doc-active',
+      title: '知识关联侧栏',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'semantic-context',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: '知识库语义面板需要展示被引用、被提及和相似内容。', styles: {} }],
+          children: [],
+        },
+        {
+          id: 'phrase-product-route',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: '公司坚定不移践行产品化路线', styles: {} }],
+          children: [],
+        },
+      ]),
+    });
+
+    const targetDocument = buildDocument({
+      id: 'doc-target',
+      title: '问题清单宣贯稿内容',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'semantic-match',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: '知识库语义面板应该展示被引用和被提及的内容。', styles: {} }],
+          children: [],
+        },
+        {
+          id: 'long-context',
+          type: 'paragraph',
+          props: {},
+          content: [
+            {
+              type: 'text',
+              text:
+                '公司坚定不移践行产品化路线，致力于打造标准化、可复用的产品体系。当前现场问题、优化建议及新需求主要通过线下沟通或零散文档记录。为了支撑调试岗位建设，系统还需要覆盖责任分配、状态回写、统计口径、跨设备复盘、会议跟踪、验收反馈、历史问题归档、处理时效分析、责任人协同、版本追踪、流程宣贯和数据复用等多个管理环节。',
+              styles: {},
+            },
+          ],
+          children: [],
+        },
+      ]),
+    });
+
+    const result = deriveSidebarAssociations({
+      activeDocument,
+      documents: [activeDocument, targetDocument],
+      folders,
+    });
+
+    expect(result.associatedDocuments).toContainEqual(
+      expect.objectContaining({
+        documentId: 'doc-target',
+        title: '问题清单宣贯稿内容',
+        badges: expect.arrayContaining(['主题相似', '原文命中']),
+        similarityEvidence: expect.arrayContaining([
+          expect.objectContaining({ blockId: 'semantic-match' }),
+        ]),
+        textEvidence: expect.arrayContaining([
+          expect.objectContaining({ matchedText: '公司坚定不移践行产品化路线' }),
+        ]),
+      }),
+    );
+    expect(result.associatedDocuments.filter((document) => document.documentId === 'doc-target')).toHaveLength(1);
+    expect(result.summary.wikiAssociationCount).toBe(1);
+  });
+
   test('returns stable empty arrays when no active document or matches exist', () => {
     expect(
       deriveSidebarAssociations({
@@ -366,6 +441,7 @@ describe('deriveSidebarAssociations', () => {
       similarBlocks: [],
       suggestedLinks: [],
       textEvidence: [],
+      associatedDocuments: [],
       summary: {
         wikiAssociationCount: 0,
       },
@@ -389,6 +465,7 @@ describe('deriveSidebarAssociations', () => {
       similarBlocks: [],
       suggestedLinks: [],
       textEvidence: [],
+      associatedDocuments: [],
       summary: {
         wikiAssociationCount: 0,
       },

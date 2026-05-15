@@ -38,6 +38,7 @@ const emptyAssociationState: SidebarAssociationResult = {
   similarBlocks: [],
   suggestedLinks: [],
   textEvidence: [],
+  associatedDocuments: [],
   summary: {
     wikiAssociationCount: 0,
   },

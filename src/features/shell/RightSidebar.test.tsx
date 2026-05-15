@@ -26,6 +26,7 @@ const emptyAssociationState = {
   similarBlocks: [],
   suggestedLinks: [],
   textEvidence: [],
+  associatedDocuments: [],
   summary: {
     wikiAssociationCount: 0,
   },

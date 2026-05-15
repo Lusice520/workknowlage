@@ -58,6 +58,27 @@ export interface SidebarTextEvidence {
   score: number;
 }
 
+export type SidebarAssociatedDocumentBadge = '主题相似' | '局部相似' | '原文命中';
+
+export interface SidebarAssociatedDocumentEvidence {
+  blockId: string;
+  label: string;
+  snippet: string;
+  searchText: string;
+  reason: string;
+  score: number;
+}
+
+export interface SidebarAssociatedDocument {
+  documentId: string;
+  title: string;
+  folderPath: string;
+  score: number;
+  badges: SidebarAssociatedDocumentBadge[];
+  similarityEvidence: SidebarAssociatedDocumentEvidence[];
+  textEvidence: SidebarTextEvidence[];
+}
+
 export interface SidebarAssociationSummary {
   wikiAssociationCount: number;
 }
@@ -68,6 +89,7 @@ export interface SidebarAssociationResult {
   similarBlocks: SidebarSimilarBlock[];
   suggestedLinks: SidebarSuggestedLink[];
   textEvidence: SidebarTextEvidence[];
+  associatedDocuments: SidebarAssociatedDocument[];
   summary: SidebarAssociationSummary;
 }
 
@@ -589,6 +611,121 @@ const deriveTextEvidence = ({
   ).slice(0, MAX_TEXT_EVIDENCE);
 };
 
+const addAssociatedDocumentBadge = (
+  badges: SidebarAssociatedDocumentBadge[],
+  badge: SidebarAssociatedDocumentBadge,
+) => {
+  if (!badges.includes(badge)) {
+    badges.push(badge);
+  }
+};
+
+const deriveAssociatedDocuments = ({
+  relatedDocumentScores,
+  similarBlocks,
+  textEvidence,
+  documents,
+  folders,
+}: {
+  relatedDocumentScores: ScoredRelatedDocument[];
+  similarBlocks: SidebarSimilarBlock[];
+  textEvidence: SidebarTextEvidence[];
+  documents: DocumentRecord[];
+  folders: FolderNode[];
+}): SidebarAssociatedDocument[] => {
+  const documentLookup = new Map(documents.map((document) => [document.id, document]));
+  const associatedDocumentMap = new Map<string, SidebarAssociatedDocument>();
+
+  const getOrCreateAssociatedDocument = ({
+    documentId,
+    title,
+    score,
+  }: {
+    documentId: string;
+    title: string;
+    score: number;
+  }) => {
+    const current = associatedDocumentMap.get(documentId);
+    if (current) {
+      current.score = Math.max(current.score, score);
+      return current;
+    }
+
+    const document = documentLookup.get(documentId);
+    const associatedDocument: SidebarAssociatedDocument = {
+      documentId,
+      title: document?.title ?? title,
+      folderPath: document ? getFolderPathLabel(folders, document.folderId) : '',
+      score,
+      badges: [],
+      similarityEvidence: [],
+      textEvidence: [],
+    };
+    associatedDocumentMap.set(documentId, associatedDocument);
+    return associatedDocument;
+  };
+
+  relatedDocumentScores.forEach(({ document, score, reason, previewMatches }) => {
+    const associatedDocument = getOrCreateAssociatedDocument({
+      documentId: document.id,
+      title: document.title,
+      score,
+    });
+    addAssociatedDocumentBadge(associatedDocument.badges, '主题相似');
+    associatedDocument.similarityEvidence.push(
+      ...previewMatches.map((match) => ({
+        blockId: match.blockId,
+        label: match.label,
+        snippet: match.snippet,
+        searchText: match.searchText,
+        reason,
+        score,
+      })),
+    );
+  });
+
+  similarBlocks.forEach((block) => {
+    const associatedDocument = getOrCreateAssociatedDocument({
+      documentId: block.documentId,
+      title: block.documentTitle,
+      score: block.score,
+    });
+    addAssociatedDocumentBadge(associatedDocument.badges, '局部相似');
+    associatedDocument.similarityEvidence.push({
+      blockId: block.blockId,
+      label: block.label,
+      snippet: createPreviewSnippet(block.text, []),
+      searchText: block.text,
+      reason: '局部相似',
+      score: block.score,
+    });
+  });
+
+  textEvidence.forEach((evidence) => {
+    const associatedDocument = getOrCreateAssociatedDocument({
+      documentId: evidence.documentId,
+      title: evidence.documentTitle,
+      score: evidence.score,
+    });
+    addAssociatedDocumentBadge(associatedDocument.badges, '原文命中');
+    associatedDocument.textEvidence.push(evidence);
+  });
+
+  return Array.from(associatedDocumentMap.values()).sort((left, right) => {
+    const leftEvidenceCount = left.similarityEvidence.length + left.textEvidence.length;
+    const rightEvidenceCount = right.similarityEvidence.length + right.textEvidence.length;
+    const leftHasTextEvidence = left.textEvidence.length > 0 ? 1 : 0;
+    const rightHasTextEvidence = right.textEvidence.length > 0 ? 1 : 0;
+
+    return (
+      right.score - left.score ||
+      rightHasTextEvidence - leftHasTextEvidence ||
+      rightEvidenceCount - leftEvidenceCount ||
+      left.title.localeCompare(right.title)
+    );
+  });
+};
+
 export const deriveSidebarAssociations = ({
   activeDocument,
   documents,
@@ -602,6 +739,7 @@ export const deriveSidebarAssociations = ({
       similarBlocks: [],
       suggestedLinks: [],
       textEvidence: [],
+      associatedDocuments: [],
       summary: {
         wikiAssociationCount: 0,
       },
@@ -753,6 +891,13 @@ export const deriveSidebarAssociations = ({
     activeDocument,
     documents,
   });
+  const associatedDocuments = deriveAssociatedDocuments({
+    relatedDocumentScores,
+    similarBlocks,
+    textEvidence,
+    documents,
+    folders,
+  });
   const wikiAssociationDocumentIds = new Set([
     ...relatedDocumentScores.map(({ document }) => document.id),
     ...similarBlocks.map((block) => block.documentId),
@@ -778,6 +923,7 @@ export const deriveSidebarAssociations = ({
     similarBlocks,
     suggestedLinks: suggestedLinks.length > 0 ? suggestedLinks : fallbackSuggestedLinks,
     textEvidence,
+    associatedDocuments,
     summary: {
       wikiAssociationCount: wikiAssociationDocumentIds.size,
     },
