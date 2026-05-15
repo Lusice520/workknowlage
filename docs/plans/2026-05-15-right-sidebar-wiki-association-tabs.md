@@ -115,6 +115,9 @@ Extend `SidebarAssociationResult` with:
 
 ```ts
 textEvidence: SidebarTextEvidence[];
+summary: {
+  wikiAssociationCount: number;
+};
 ```
 
 Update empty states in:
@@ -130,6 +133,7 @@ Add a small evidence extractor that:
 - Searches same-space document candidates for exact substring matches.
 - Emits evidence with matched block id, target title, snippet, and reason.
 - Does not feed evidence into `relatedDocuments`.
+- Computes `summary.wikiAssociationCount` from explicit references, related topics, and text evidence. If explicit references remain derived in `RightSidebar` for the first pass, compute the summary from prepared semantic/evidence state first and add explicit references in a later task.
 
 **Step 4: Run focused tests**
 
@@ -223,6 +227,12 @@ expect(screen.getByRole('button', { name: '属性' })).toBeInTheDocument();
 expect(screen.getByRole('button', { name: 'Wiki' })).toBeInTheDocument();
 ```
 
+Add a badge assertion when associations exist:
+
+```ts
+expect(screen.getByRole('button', { name: /Wiki 2/ })).toBeInTheDocument();
+```
+
 Then click Wiki and assert:
 
 ```ts
@@ -248,6 +258,7 @@ In `RightSidebar.tsx`:
 
 - Add `const [activeTab, setActiveTab] = useState<'properties' | 'wiki'>('properties');`
 - Add a compact segmented control near the top of the sidebar.
+- Add a compact badge to the Wiki tab when the association count is greater than zero.
 - Move existing tags and outline into the Properties tab body.
 - Move current knowledge association card into the Wiki tab body.
 
@@ -366,6 +377,9 @@ Update all expected empty association states to include:
 
 ```ts
 textEvidence: [],
+summary: {
+  wikiAssociationCount: 0,
+},
 ```
 
 Add a cache-key regression if evidence depends on `contentJson`:

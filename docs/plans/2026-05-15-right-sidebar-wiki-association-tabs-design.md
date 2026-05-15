@@ -100,9 +100,12 @@ The right sidebar header should include a segmented tab control:
 - Properties
 - Wiki
 
+When Wiki associations exist, the Wiki tab should show a compact badge. The badge tells the user that the current document has relationship signals even while they are viewing Properties. The first implementation can show one aggregated count from explicit references, related topics, and text evidence. Later versions can tune the count rule if raw evidence hits become too noisy.
+
 Default tab:
 
 - Keep Properties as the default initially, to avoid surprising users who rely on the current sidebar layout.
+- Show the Wiki badge from the default Properties tab when associations exist.
 - Consider remembering the last selected tab later if users frequently stay in Wiki mode.
 
 Wiki tab layout:
@@ -127,6 +130,9 @@ interface SidebarAssociationResult {
   relatedTopics: RelatedTopic[];
   textEvidence: TextEvidence[];
   relatedTags: SidebarRelatedTag[];
+  summary: {
+    wikiAssociationCount: number;
+  };
 }
 ```
 
@@ -168,6 +174,8 @@ Add focused unit tests around `sidebarAssociations`:
 Add UI tests around `RightSidebar`:
 
 - It renders the Properties and Wiki tabs.
+- Wiki tab shows a badge when explicit references, related topics, or text evidence exist.
+- Wiki tab hides the badge when there are no association signals.
 - Properties tab preserves tags and outline.
 - Wiki tab renders explicit references, related topics, and text evidence independently.
 - Evidence clicks open the matched document/block.
