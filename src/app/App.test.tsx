@@ -210,8 +210,9 @@ test('renders the sidebar overview and knowledge association card for the active
 
   expect(screen.getByText('知识关联')).toBeInTheDocument();
   expect(screen.getByText('显式引用')).toBeInTheDocument();
-  expect(screen.getByText('相关主题')).toBeInTheDocument();
-  expect(screen.getByText('原文线索')).toBeInTheDocument();
+  expect(screen.getByText('关联文档')).toBeInTheDocument();
+  expect(screen.queryByText('相关主题')).not.toBeInTheDocument();
+  expect(screen.queryByText('原文线索')).not.toBeInTheDocument();
   expect(screen.queryByText('上下文')).not.toBeInTheDocument();
   expect(screen.queryByText('关联')).not.toBeInTheDocument();
 });
