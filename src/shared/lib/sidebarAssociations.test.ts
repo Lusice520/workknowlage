@@ -428,6 +428,84 @@ describe('deriveSidebarAssociations', () => {
     expect(result.summary.wikiAssociationCount).toBe(1);
   });
 
+  test('detects original text evidence from BlockNote list items', () => {
+    const activeDocument = buildDocument({
+      id: 'doc-active',
+      title: '测试文档',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'phrase-plc-point',
+          type: 'numberedListItem',
+          props: {},
+          content: [{ type: 'text', text: 'LC 点位是否正确', styles: {} }],
+          children: [],
+        },
+        {
+          id: 'phrase-device-action',
+          type: 'checkListItem',
+          props: {},
+          content: [{ type: 'text', text: '设备动作是否正常', styles: {} }],
+          children: [],
+        },
+      ]),
+    });
+
+    const targetDocument = buildDocument({
+      id: 'doc-target',
+      title: '无标题文档',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'target-plc-point',
+          type: 'numberedListItem',
+          props: {},
+          content: [{ type: 'text', text: 'PLC 点位是否正确', styles: {} }],
+          children: [],
+        },
+        {
+          id: 'target-device-action',
+          type: 'checkListItem',
+          props: {},
+          content: [{ type: 'text', text: '设备动作是否正常', styles: {} }],
+          children: [],
+        },
+      ]),
+    });
+
+    const result = deriveSidebarAssociations({
+      activeDocument,
+      documents: [activeDocument, targetDocument],
+      folders,
+    });
+
+    expect(result.textEvidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          documentId: 'doc-target',
+          blockId: 'target-plc-point',
+          matchedText: 'LC 点位是否正确',
+        }),
+        expect.objectContaining({
+          documentId: 'doc-target',
+          blockId: 'target-device-action',
+          matchedText: '设备动作是否正常',
+        }),
+      ]),
+    );
+    expect(result.associatedDocuments).toContainEqual(
+      expect.objectContaining({
+        documentId: 'doc-target',
+        title: '无标题文档',
+        badges: ['原文命中'],
+        textEvidence: expect.arrayContaining([
+          expect.objectContaining({ matchedText: 'LC 点位是否正确' }),
+          expect.objectContaining({ matchedText: '设备动作是否正常' }),
+        ]),
+      }),
+    );
+  });
+
   test('returns stable empty arrays when no active document or matches exist', () => {
     expect(
       deriveSidebarAssociations({

@@ -331,7 +331,12 @@ const getLegacySimilarityCandidates = (document: DocumentRecord): SectionSimilar
     })
     .filter((candidate) => candidate.text.length > 0 && candidate.tokens.length > 0);
 
-const getBlockSimilarityCandidates = (blocks: unknown[], documentTitle: string, pathPrefix = 'block'): SectionSimilarityCandidate[] =>
+const getBlockSimilarityCandidates = (
+  blocks: unknown[],
+  documentTitle: string,
+  pathPrefix = 'block',
+  options: { includeShortListItems?: boolean } = {},
+): SectionSimilarityCandidate[] =>
   blocks.flatMap((block, index) => {
     const record = asRecord(block);
     if (!record || typeof record.type !== 'string') {
@@ -341,15 +346,33 @@ const getBlockSimilarityCandidates = (blocks: unknown[], documentTitle: string, 
     const blockId = typeof record.id === 'string' ? record.id : `${pathPrefix}-${index}`;
     const text = [flattenInlineText(record.content), getBlockPropsText(record.props)].join(' ').trim();
     const childCandidates = Array.isArray(record.children)
-      ? getBlockSimilarityCandidates(record.children, documentTitle, `${blockId}-child`)
+      ? getBlockSimilarityCandidates(record.children, documentTitle, `${blockId}-child`, options)
       : [];
 
     if (text.length === 0) {
       return childCandidates;
     }
 
-    const candidateTypes = new Set(['heading', 'paragraph', 'quote', 'bulletListItem', 'image', 'video', 'file', 'kbAttachment']);
+    const candidateTypes = new Set([
+      'heading',
+      'paragraph',
+      'quote',
+      'bulletListItem',
+      'numberedListItem',
+      'checkListItem',
+      'image',
+      'video',
+      'file',
+      'kbAttachment',
+    ]);
     if (!candidateTypes.has(record.type)) {
+      return childCandidates;
+    }
+    if (
+      !options.includeShortListItems &&
+      ['bulletListItem', 'numberedListItem', 'checkListItem'].includes(record.type) &&
+      getVisibleTextLength(text) < MIN_MEANINGFUL_BODY_LENGTH
+    ) {
       return childCandidates;
     }
 
@@ -428,7 +451,7 @@ const getAllDocumentSimilarityCandidates = (document: DocumentRecord): SectionSi
   const persistedBlocks = parseContentBlocks(document.contentJson);
   const blockCandidates =
     persistedBlocks.length > 0 && !persistedBlocks.every((block) => isLegacySectionLike(block))
-      ? getBlockSimilarityCandidates(persistedBlocks, document.title)
+      ? getBlockSimilarityCandidates(persistedBlocks, document.title, 'block', { includeShortListItems: true })
       : [];
 
   if (blockCandidates.length > 0) {

@@ -830,6 +830,7 @@ export function RightSidebar({
                           documentId: hoverPreview.documentId,
                           blockId: evidence.blockId,
                           fallbackText: evidence.searchText,
+                          highlightQuery: evidence.searchText,
                         });
                       }}
                     >
@@ -858,6 +859,7 @@ export function RightSidebar({
                           documentId: evidence.documentId,
                           blockId: evidence.blockId,
                           fallbackText: evidence.snippet || evidence.matchedText,
+                          highlightQuery: evidence.matchedText,
                         });
                       }}
                     >

@@ -152,6 +152,7 @@ test('renders text evidence in the wiki tab and opens the matched source block',
     documentId: 'doc-evidence',
     blockId: 'long-context',
     fallbackText: expect.stringContaining('公司坚定不移践行产品化路线'),
+    highlightQuery: '公司坚定不移践行产品化路线',
   });
 });
 
@@ -264,6 +265,7 @@ test('renders aggregated associated document evidence in the wiki tab', async ()
     documentId: 'doc-evidence',
     blockId: 'long-context',
     fallbackText: expect.stringContaining('公司坚定不移践行产品化路线'),
+    highlightQuery: '公司坚定不移践行产品化路线',
   });
 });
 
@@ -718,6 +720,7 @@ test('shows similar block knowledge after clicking an outline item', () => {
     documentId: 'doc-peer',
     blockId: 'section-peer-body',
     fallbackText: '图谱推荐在实验设计阶段补充了更多候选关系。',
+    highlightQuery: '图谱推荐在实验设计阶段补充了更多候选关系。',
   });
 });
 
