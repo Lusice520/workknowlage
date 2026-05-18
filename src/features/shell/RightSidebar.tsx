@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, FileText, Hash, Library, ListTree, Plus, Sparkles, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, EyeOff, FileText, Hash, Library, ListTree, Plus, Sparkles, ThumbsUp, X } from 'lucide-react';
 import { deriveOutlineFromContentJson } from '../../shared/lib/documentContent';
 import type {
   SidebarAssociationResult,
@@ -9,6 +9,7 @@ import type {
   SidebarAssociatedDocumentEvidence,
   SidebarTextEvidence,
 } from '../../shared/lib/sidebarAssociations';
+import type { ActiveWikiRecommendationFeedback, WikiRecommendationFeedbackValue } from '../../shared/lib/wikiRecommendationFeedback';
 import { extractOutgoingMentions } from '../../shared/lib/outgoingMentions';
 import type {
   BacklinkRecord,
@@ -27,10 +28,13 @@ interface RightSidebarProps {
   activeSpace: Space | null;
   associationState?: SidebarAssociationResult;
   focusedOutlineItemId?: string | null;
+  recommendationFeedback?: ActiveWikiRecommendationFeedback;
   onAddTagToDocument: (documentId: string, label: string) => Promise<void>;
   onFocusOutlineItem?: (outlineItemId: string | null) => void;
+  onMarkRecommendationUseful?: (documentId: string) => void;
   onRemoveTagFromDocument: (documentId: string, tagId: string) => Promise<void>;
   onOpenBacklinkDocument?: (target: DocumentNavigationTarget) => void;
+  onShowLessLikeThis?: (documentId: string) => void;
 }
 
 const compactInputStyle = {
@@ -49,6 +53,8 @@ const emptyAssociationState: SidebarAssociationResult = {
     wikiAssociationCount: 0,
   },
 };
+
+const emptyRecommendationFeedback: ActiveWikiRecommendationFeedback = {};
 
 type RightSidebarTab = 'properties' | 'wiki';
 
@@ -211,6 +217,23 @@ const evidenceStrengthClassNames: Record<SidebarAssociatedDocument['evidenceStre
   low: 'bg-slate-50 text-slate-500 ring-slate-200',
 };
 
+const recommendationFeedbackLabels: Record<WikiRecommendationFeedbackValue, string> = {
+  useful: '已标记有用',
+  'less-like-this': '已减少此类',
+};
+
+const recommendationFeedbackRank = (feedback: WikiRecommendationFeedbackValue | undefined): number => {
+  if (feedback === 'useful') {
+    return 1;
+  }
+
+  if (feedback === 'less-like-this') {
+    return -1;
+  }
+
+  return 0;
+};
+
 const buildLegacyAssociatedDocuments = (associationState: SidebarAssociationResult): SidebarAssociatedDocument[] => {
   const associatedDocumentMap = new Map<string, SidebarAssociatedDocument>();
 
@@ -351,10 +374,13 @@ export function RightSidebar({
   activeSpace: _activeSpace,
   associationState = emptyAssociationState,
   focusedOutlineItemId = null,
+  recommendationFeedback = emptyRecommendationFeedback,
   onAddTagToDocument,
   onFocusOutlineItem,
+  onMarkRecommendationUseful,
   onRemoveTagFromDocument,
   onOpenBacklinkDocument,
+  onShowLessLikeThis,
 }: RightSidebarProps) {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [nextTagLabel, setNextTagLabel] = useState('');
@@ -421,11 +447,24 @@ export function RightSidebar({
         : buildLegacyAssociatedDocuments(associationState),
     [associationState],
   );
-  const detailAssociatedDocument = useMemo(
-    () => associatedDocuments.find((document) => document.documentId === detailAssociatedDocumentId) ?? null,
-    [associatedDocuments, detailAssociatedDocumentId],
+  const orderedAssociatedDocuments = useMemo(
+    () =>
+      associatedDocuments
+        .map((document, index) => ({ document, index }))
+        .sort((left, right) => {
+          const leftRank = recommendationFeedbackRank(recommendationFeedback[left.document.documentId]);
+          const rightRank = recommendationFeedbackRank(recommendationFeedback[right.document.documentId]);
+
+          return rightRank - leftRank || left.index - right.index;
+        })
+        .map(({ document }) => document),
+    [associatedDocuments, recommendationFeedback],
   );
-  const hasAssociatedDocumentResults = associatedDocuments.length > 0;
+  const detailAssociatedDocument = useMemo(
+    () => orderedAssociatedDocuments.find((document) => document.documentId === detailAssociatedDocumentId) ?? null,
+    [orderedAssociatedDocuments, detailAssociatedDocumentId],
+  );
+  const hasAssociatedDocumentResults = orderedAssociatedDocuments.length > 0;
   const wikiAssociationCount = useMemo(() => {
     const associatedDocumentIds = new Set<string>();
 
@@ -888,9 +927,10 @@ export function RightSidebar({
                   {activeDocument ? (
                     hasAssociatedDocumentResults ? (
                       <div className="divide-y divide-slate-100/90">
-                        {associatedDocuments.map((associatedDocument) => {
+                        {orderedAssociatedDocuments.map((associatedDocument) => {
                           const evidenceSummary = getAssociatedDocumentEvidenceSummary(associatedDocument);
                           const hasHoverPreview = getAssociatedDocumentEvidenceCount(associatedDocument) > 0;
+                          const currentFeedback = recommendationFeedback[associatedDocument.documentId];
                           const isHovered =
                             hoveredSimilarDocumentId === associatedDocument.documentId ||
                             hoverPreview?.documentId === associatedDocument.documentId;
@@ -901,6 +941,7 @@ export function RightSidebar({
                               className={[
                                 'relative flex items-start gap-1 rounded-[10px] transition-colors duration-200 hover:bg-slate-100/70',
                                 isHovered ? 'bg-slate-100/85' : '',
+                                currentFeedback === 'less-like-this' ? 'opacity-70' : '',
                               ].join(' ')}
                             >
                               <button
@@ -954,6 +995,11 @@ export function RightSidebar({
                                     {associatedDocument.title}
                                   </span>
                                   <span className="mt-1 flex flex-wrap gap-1">
+                                    {currentFeedback ? (
+                                      <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-500 ring-1 ring-slate-200">
+                                        {recommendationFeedbackLabels[currentFeedback]}
+                                      </span>
+                                    ) : null}
                                     <span
                                       className={[
                                         'rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ring-1',
@@ -978,18 +1024,59 @@ export function RightSidebar({
                                   ) : null}
                                 </span>
                               </button>
-                              <button
-                                type="button"
-                                aria-label={`查看全部线索 ${associatedDocument.title}`}
-                                className="mr-1 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-slate-400 transition-colors hover:bg-white hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
-                                onMouseEnter={hideHoverPreview}
-                                onClick={() => {
-                                  hideHoverPreview();
-                                  setDetailAssociatedDocumentId(associatedDocument.documentId);
-                                }}
-                              >
-                                <ListTree size={13} />
-                              </button>
+                              <div className="mr-1 mt-2 flex shrink-0 items-center gap-0.5">
+                                {onMarkRecommendationUseful ? (
+                                  <button
+                                    type="button"
+                                    aria-label={`标记推荐有用 ${associatedDocument.title}`}
+                                    title="有用"
+                                    className={[
+                                      'flex h-7 w-7 items-center justify-center rounded-[8px] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
+                                      currentFeedback === 'useful' ? 'text-blue-600' : 'text-slate-400 hover:text-blue-600',
+                                    ].join(' ')}
+                                    onMouseEnter={hideHoverPreview}
+                                    onClick={() => {
+                                      hideHoverPreview();
+                                      onMarkRecommendationUseful(associatedDocument.documentId);
+                                    }}
+                                  >
+                                    <ThumbsUp size={13} />
+                                  </button>
+                                ) : null}
+                                {onShowLessLikeThis ? (
+                                  <button
+                                    type="button"
+                                    aria-label={`减少此类推荐 ${associatedDocument.title}`}
+                                    title="少看此类"
+                                    className={[
+                                      'flex h-7 w-7 items-center justify-center rounded-[8px] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
+                                      currentFeedback === 'less-like-this'
+                                        ? 'text-slate-700'
+                                        : 'text-slate-400 hover:text-slate-700',
+                                    ].join(' ')}
+                                    onMouseEnter={hideHoverPreview}
+                                    onClick={() => {
+                                      hideHoverPreview();
+                                      onShowLessLikeThis(associatedDocument.documentId);
+                                    }}
+                                  >
+                                    <EyeOff size={13} />
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  aria-label={`查看全部线索 ${associatedDocument.title}`}
+                                  title="查看全部线索"
+                                  className="flex h-7 w-7 items-center justify-center rounded-[8px] text-slate-400 transition-colors hover:bg-white hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                                  onMouseEnter={hideHoverPreview}
+                                  onClick={() => {
+                                    hideHoverPreview();
+                                    setDetailAssociatedDocumentId(associatedDocument.documentId);
+                                  }}
+                                >
+                                  <ListTree size={13} />
+                                </button>
+                              </div>
                               {hasHoverPreview && isHovered ? <span className="sr-only">显示关联证据预览</span> : null}
                             </div>
                           );

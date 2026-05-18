@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import App from '../../app/App';
+import type { SidebarAssociatedDocument } from '../../shared/lib/sidebarAssociations';
 import type { DocumentRecord } from '../../shared/types/workspace';
 import { RightSidebar } from './RightSidebar';
 
@@ -35,6 +36,21 @@ const emptyAssociationState = {
 const openWikiTab = () => {
   fireEvent.click(screen.getByRole('button', { name: /^Wiki/ }));
 };
+
+const createAssociatedDocument = (
+  overrides: Partial<SidebarAssociatedDocument> = {},
+): SidebarAssociatedDocument => ({
+  documentId: 'doc-associated',
+  title: '关联文档',
+  folderPath: '',
+  score: 1,
+  badges: ['主题相似'],
+  recommendationReason: '主题相似',
+  evidenceStrength: 'low',
+  similarityEvidence: [],
+  textEvidence: [],
+  ...overrides,
+});
 
 test('renders property and wiki tabs with a wiki association badge', () => {
   render(
@@ -294,6 +310,68 @@ test('renders aggregated associated document evidence in the wiki tab', async ()
     fallbackText: expect.stringContaining('公司坚定不移践行产品化路线'),
     highlightQuery: '公司坚定不移践行产品化路线',
   });
+});
+
+test('supports lightweight recommendation feedback without treating it as relation confirmation', () => {
+  const handleMarkUseful = vi.fn();
+  const handleShowLessLikeThis = vi.fn();
+
+  render(
+    <RightSidebar
+      activeDocument={createDocument({
+        id: 'doc-current',
+        title: '测试文档',
+      })}
+      activeQuickNote={null}
+      activeFolder={null}
+      activeSpace={null}
+      associationState={{
+        ...emptyAssociationState,
+        associatedDocuments: [
+          createAssociatedDocument({
+            documentId: 'doc-neutral',
+            title: '普通关联',
+            score: 8,
+          }),
+          createAssociatedDocument({
+            documentId: 'doc-less',
+            title: '噪声关联',
+            score: 12,
+          }),
+          createAssociatedDocument({
+            documentId: 'doc-useful',
+            title: '高价值关联',
+            score: 4,
+          }),
+        ],
+        summary: {
+          wikiAssociationCount: 3,
+        },
+      }}
+      recommendationFeedback={{
+        'doc-less': 'less-like-this',
+        'doc-useful': 'useful',
+      }}
+      onAddTagToDocument={async () => {}}
+      onRemoveTagFromDocument={async () => {}}
+      onMarkRecommendationUseful={handleMarkUseful}
+      onShowLessLikeThis={handleShowLessLikeThis}
+    />
+  );
+
+  openWikiTab();
+
+  expect(
+    screen.getAllByRole('button', { name: /打开关联文档/ }).map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['打开关联文档 高价值关联', '打开关联文档 普通关联', '打开关联文档 噪声关联']);
+  expect(screen.getByText('已标记有用')).toBeInTheDocument();
+  expect(screen.getByText('已减少此类')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: '标记推荐有用 普通关联' }));
+  fireEvent.click(screen.getByRole('button', { name: '减少此类推荐 普通关联' }));
+
+  expect(handleMarkUseful).toHaveBeenCalledWith('doc-neutral');
+  expect(handleShowLessLikeThis).toHaveBeenCalledWith('doc-neutral');
 });
 
 test('renders the overview and knowledge association sections for the active document', async () => {

@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useWorkspaceSessionContext } from '../../app/contexts/WorkspaceSessionContext';
 import { useSearchContext } from '../../app/contexts/SearchContext';
 import { useShareContext } from '../../app/contexts/ShareContext';
 import { useExportContext } from '../../app/contexts/ExportContext';
 import { useDataToolsContext } from '../../app/contexts/DataToolsContext';
 import { useSidebarAssociations } from '../../app/useSidebarAssociations';
+import {
+  getActiveWikiRecommendationFeedback,
+  setWikiRecommendationFeedback,
+  type WikiRecommendationFeedbackStore,
+} from '../../shared/lib/wikiRecommendationFeedback';
 import { LeftSidebar } from './LeftSidebar';
 import { CenterPane } from './CenterPane';
 import { RightSidebar } from './RightSidebar';
@@ -26,6 +31,7 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
     tone: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [wikiRecommendationFeedback, setWikiRecommendationFeedbackState] = useState<WikiRecommendationFeedbackStore>({});
   const [focusedOutlineItemId, setFocusedOutlineItemId] = useState<string | null>(null);
   const [moveToSpaceRequest, setMoveToSpaceRequest] = useState<{
     kind: 'document' | 'folder';
@@ -58,6 +64,32 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
     folders: ws.state.seed.folders,
     focusedOutlineItemId,
   });
+  const activeWikiRecommendationFeedback = useMemo(
+    () => getActiveWikiRecommendationFeedback(wikiRecommendationFeedback, ws.activeDocument?.id),
+    [wikiRecommendationFeedback, ws.activeDocument?.id],
+  );
+
+  const markWikiRecommendationUseful = useCallback((targetDocumentId: string) => {
+    const sourceDocumentId = ws.activeDocument?.id;
+    if (!sourceDocumentId) {
+      return;
+    }
+
+    setWikiRecommendationFeedbackState((current) =>
+      setWikiRecommendationFeedback(current, sourceDocumentId, targetDocumentId, 'useful'),
+    );
+  }, [ws.activeDocument?.id]);
+
+  const showLessWikiRecommendationsLikeThis = useCallback((targetDocumentId: string) => {
+    const sourceDocumentId = ws.activeDocument?.id;
+    if (!sourceDocumentId) {
+      return;
+    }
+
+    setWikiRecommendationFeedbackState((current) =>
+      setWikiRecommendationFeedback(current, sourceDocumentId, targetDocumentId, 'less-like-this'),
+    );
+  }, [ws.activeDocument?.id]);
 
   const handleCloseMoveToSpace = () => {
     if (moveToSpaceSubmitting) {
@@ -195,10 +227,13 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
             activeSpace={ws.activeSpace}
             associationState={associationState}
             focusedOutlineItemId={focusedOutlineItemId}
+            recommendationFeedback={activeWikiRecommendationFeedback}
             onAddTagToDocument={ws.onAddTagToDocument}
             onFocusOutlineItem={setFocusedOutlineItemId}
+            onMarkRecommendationUseful={markWikiRecommendationUseful}
             onRemoveTagFromDocument={ws.onRemoveTagFromDocument}
             onOpenBacklinkDocument={ws.onOpenBacklinkDocument}
+            onShowLessLikeThis={showLessWikiRecommendationsLikeThis}
           />
         </div>
       </div>
