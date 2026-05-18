@@ -107,6 +107,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 
 2026-05-15: WorkKnowlage feature SPECs should actively resolve implementation-facing product questions before planning. Do not leave obvious defaults as pending. For the right-sidebar Wiki association spec, decisions such as badge count vs dot, `9+` cap, default Properties tab, no current AI/embedding retrieval, and no manual evidence-to-relation promotion belong in the SPEC as current-version decisions.
 
+2026-05-18: Right-sidebar Wiki associations are a recommendation and explanation surface, not a manual relationship-review workflow. Do not make users confirm, pin, or manually solidify every recommended relation as the primary product loop. If WorkKnowlage needs a reliable relationship graph, use deterministic evidence to recall candidates and an LLM-based relation judgement layer to decide relation validity, relation type, confidence, and rationale. User feedback should remain lightweight and optional for ranking/noise reduction.
+
 ## How to Add Lessons
 
 当 bug、用户纠正或 architectural decision 会影响未来工作时，追加一条简短 dated note，包含：
