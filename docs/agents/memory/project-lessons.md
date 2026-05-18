@@ -109,6 +109,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 
 2026-05-18: Right-sidebar Wiki associations are a recommendation and explanation surface, not a manual relationship-review workflow. Do not make users confirm, pin, or manually solidify every recommended relation as the primary product loop. If WorkKnowlage needs a reliable relationship graph, use deterministic evidence to recall candidates and an LLM-based relation judgement layer to decide relation validity, relation type, confidence, and rationale. User feedback should remain lightweight and optional for ranking/noise reduction.
 
+2026-05-18: For WorkKnowlage requirements, avoid maintaining separate long-lived design docs and feature SPECs for the same single feature. Put product background,方案取舍, flows, states, boundaries, and acceptance criteria into the flat feature SPEC under `docs/requirements/specs/`. Implementation plans are execution artifacts for coding sessions; only create or keep them when actively implementing multi-step code changes, and do not treat them as product source-of-truth.
+
 ## How to Add Lessons
 
 当 bug、用户纠正或 architectural decision 会影响未来工作时，追加一条简短 dated note，包含：
