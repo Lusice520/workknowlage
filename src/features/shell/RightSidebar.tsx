@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownLeft, ArrowUpRight, FileText, Hash, Library, ListTree, Plus, Sparkles, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, FileText, Hash, Library, ListTree, Plus, Sparkles, X } from 'lucide-react';
 import { deriveOutlineFromContentJson } from '../../shared/lib/documentContent';
 import type {
   SidebarAssociationResult,
@@ -169,6 +169,48 @@ const getAssociatedDocumentEvidenceSummary = (document: SidebarAssociatedDocumen
   return document.badges.join(' · ');
 };
 
+const getAssociatedDocumentRecommendationReason = (document: SidebarAssociatedDocument): string => {
+  const keySentenceEvidence = document.textEvidence.find((evidence) => evidence.reason.includes('关键句'));
+
+  if (keySentenceEvidence) {
+    return keySentenceEvidence.reason || '命中关键句';
+  }
+
+  if (document.textEvidence.length > 0) {
+    return `${document.textEvidence.length} 条原文线索`;
+  }
+
+  if (document.badges.includes('局部相似')) {
+    return '局部内容相似';
+  }
+
+  if (document.badges.includes('主题相似')) {
+    return '主题相似';
+  }
+
+  return '相关文档';
+};
+
+const getAssociatedDocumentEvidenceStrength = (
+  document: SidebarAssociatedDocument,
+): SidebarAssociatedDocument['evidenceStrength'] => {
+  if (document.textEvidence.length > 0) {
+    return 'high';
+  }
+
+  if (document.badges.includes('局部相似')) {
+    return 'medium';
+  }
+
+  return 'low';
+};
+
+const evidenceStrengthClassNames: Record<SidebarAssociatedDocument['evidenceStrength'], string> = {
+  high: 'bg-blue-50 text-blue-600 ring-blue-100',
+  medium: 'bg-violet-50 text-violet-600 ring-violet-100',
+  low: 'bg-slate-50 text-slate-500 ring-slate-200',
+};
+
 const buildLegacyAssociatedDocuments = (associationState: SidebarAssociationResult): SidebarAssociatedDocument[] => {
   const associatedDocumentMap = new Map<string, SidebarAssociatedDocument>();
 
@@ -198,6 +240,8 @@ const buildLegacyAssociatedDocuments = (associationState: SidebarAssociationResu
       folderPath,
       score,
       badges: [],
+      recommendationReason: '相关文档',
+      evidenceStrength: 'low',
       similarityEvidence: [],
       textEvidence: [],
     };
@@ -257,19 +301,25 @@ const buildLegacyAssociatedDocuments = (associationState: SidebarAssociationResu
     associatedDocument.textEvidence.push(evidence);
   });
 
-  return Array.from(associatedDocumentMap.values()).sort((left, right) => {
-    const leftEvidenceCount = getAssociatedDocumentEvidenceCount(left);
-    const rightEvidenceCount = getAssociatedDocumentEvidenceCount(right);
-    const leftHasTextEvidence = left.textEvidence.length > 0 ? 1 : 0;
-    const rightHasTextEvidence = right.textEvidence.length > 0 ? 1 : 0;
+  return Array.from(associatedDocumentMap.values())
+    .map((document) => ({
+      ...document,
+      recommendationReason: getAssociatedDocumentRecommendationReason(document),
+      evidenceStrength: getAssociatedDocumentEvidenceStrength(document),
+    }))
+    .sort((left, right) => {
+      const leftEvidenceCount = getAssociatedDocumentEvidenceCount(left);
+      const rightEvidenceCount = getAssociatedDocumentEvidenceCount(right);
+      const leftHasTextEvidence = left.textEvidence.length > 0 ? 1 : 0;
+      const rightHasTextEvidence = right.textEvidence.length > 0 ? 1 : 0;
 
-    return (
-      right.score - left.score ||
-      rightHasTextEvidence - leftHasTextEvidence ||
-      rightEvidenceCount - leftEvidenceCount ||
-      left.title.localeCompare(right.title)
-    );
-  });
+      return (
+        right.score - left.score ||
+        rightHasTextEvidence - leftHasTextEvidence ||
+        rightEvidenceCount - leftEvidenceCount ||
+        left.title.localeCompare(right.title)
+      );
+    });
 };
 
 const getPreviewPosition = (anchorRect: DOMRect, previewHeight: number) => {
@@ -311,6 +361,7 @@ export function RightSidebar({
   const [activeSidebarTab, setActiveSidebarTab] = useState<RightSidebarTab>('properties');
   const [hoveredSimilarDocumentId, setHoveredSimilarDocumentId] = useState<string | null>(null);
   const [hoverPreview, setHoverPreview] = useState<AssociatedDocumentHoverPreview | null>(null);
+  const [detailAssociatedDocumentId, setDetailAssociatedDocumentId] = useState<string | null>(null);
   const hoverCloseTimeoutRef = useRef<number | null>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
@@ -328,6 +379,7 @@ export function RightSidebar({
     setActiveSidebarTab('properties');
     setHoveredSimilarDocumentId(null);
     setHoverPreview(null);
+    setDetailAssociatedDocumentId(null);
   }, [activeDocument?.id, activeQuickNote?.id]);
 
   useEffect(
@@ -369,6 +421,10 @@ export function RightSidebar({
         : buildLegacyAssociatedDocuments(associationState),
     [associationState],
   );
+  const detailAssociatedDocument = useMemo(
+    () => associatedDocuments.find((document) => document.documentId === detailAssociatedDocumentId) ?? null,
+    [associatedDocuments, detailAssociatedDocumentId],
+  );
   const hasAssociatedDocumentResults = associatedDocuments.length > 0;
   const wikiAssociationCount = useMemo(() => {
     const associatedDocumentIds = new Set<string>();
@@ -380,6 +436,14 @@ export function RightSidebar({
     return Math.max(associatedDocumentIds.size, associationState.summary?.wikiAssociationCount ?? 0);
   }, [associatedDocuments, associationState.summary?.wikiAssociationCount, incomingBacklinks, outgoingMentions]);
   const wikiAssociationBadgeLabel = getWikiAssociationBadgeLabel(wikiAssociationCount);
+
+  useEffect(() => {
+    if (!detailAssociatedDocumentId || detailAssociatedDocument) {
+      return;
+    }
+
+    setDetailAssociatedDocumentId(null);
+  }, [detailAssociatedDocument, detailAssociatedDocumentId]);
 
   const clearHoverCloseTimeout = () => {
     if (hoverCloseTimeoutRef.current !== null) {
@@ -457,6 +521,7 @@ export function RightSidebar({
             aria-pressed={activeSidebarTab === 'properties'}
             onClick={() => {
               setActiveSidebarTab('properties');
+              setDetailAssociatedDocumentId(null);
               hideHoverPreview();
             }}
           >
@@ -471,7 +536,10 @@ export function RightSidebar({
                 : 'text-slate-500 hover:text-slate-700',
             ].join(' ')}
             aria-pressed={activeSidebarTab === 'wiki'}
-            onClick={() => setActiveSidebarTab('wiki')}
+            onClick={() => {
+              setActiveSidebarTab('wiki');
+              hideHoverPreview();
+            }}
           >
             <span>Wiki</span>
             {wikiAssociationBadgeLabel ? (
@@ -686,101 +754,256 @@ export function RightSidebar({
             </div>
 
             <div className="space-y-2">
-              <p className={referenceSectionLabelStyle}>关联文档</p>
-              {activeDocument ? (
-                hasAssociatedDocumentResults ? (
-                  <div className="divide-y divide-slate-100/90">
-                    {associatedDocuments.map((associatedDocument) => {
-                      const evidenceSummary = getAssociatedDocumentEvidenceSummary(associatedDocument);
-                      const hasHoverPreview = getAssociatedDocumentEvidenceCount(associatedDocument) > 0;
-                      const isHovered =
-                        hoveredSimilarDocumentId === associatedDocument.documentId ||
-                        hoverPreview?.documentId === associatedDocument.documentId;
+              {detailAssociatedDocument ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      aria-label="返回关联文档列表"
+                      className="flex min-w-0 items-center gap-1.5 rounded-[9px] px-1.5 py-1 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                      onClick={() => {
+                        setDetailAssociatedDocumentId(null);
+                        hideHoverPreview();
+                      }}
+                    >
+                      <ArrowLeft size={13} />
+                      <span>全部线索</span>
+                    </button>
+                    {getAssociatedDocumentEvidenceSummary(detailAssociatedDocument) ? (
+                      <span className="shrink-0 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-500">
+                        {getAssociatedDocumentEvidenceSummary(detailAssociatedDocument)}
+                      </span>
+                    ) : null}
+                  </div>
 
-                      return (
-                        <div key={associatedDocument.documentId} className="relative">
+                  <div className="rounded-[14px] bg-slate-50/80 px-3 py-3 ring-1 ring-slate-200/60">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-white text-blue-500 ring-1 ring-slate-200">
+                        <FileText size={15} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-slate-800">{detailAssociatedDocument.title}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                          {detailAssociatedDocument.folderPath || 'Wiki 推荐'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span
+                        className={[
+                          'rounded-full px-2 py-1 text-[10px] font-semibold leading-none ring-1',
+                          evidenceStrengthClassNames[detailAssociatedDocument.evidenceStrength],
+                        ].join(' ')}
+                      >
+                        {detailAssociatedDocument.recommendationReason}
+                      </span>
+                      {detailAssociatedDocument.badges.map((badge) => (
+                        <span
+                          key={`${detailAssociatedDocument.documentId}-detail-${badge}`}
+                          className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold leading-none text-blue-600 ring-1 ring-blue-100"
+                        >
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {detailAssociatedDocument.similarityEvidence.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className={referenceSectionLabelStyle}>相似证据</p>
+                      <div className="space-y-2">
+                        {detailAssociatedDocument.similarityEvidence.map((evidence, index) => (
                           <button
                             type="button"
-                            aria-label={`打开关联文档 ${associatedDocument.title}`}
-                            className={[
-                              'group flex w-full items-start gap-2.5 rounded-[10px] px-1.5 py-2.5 text-left transition-colors duration-200 hover:bg-slate-100/70 disabled:cursor-default disabled:opacity-75',
-                              isHovered ? 'bg-slate-100/85' : '',
-                            ].join(' ')}
+                            key={`${detailAssociatedDocument.documentId}-detail-similarity-${evidence.blockId}-${index}`}
+                            aria-label={`打开相似证据 ${detailAssociatedDocument.title} / ${evidence.label}`}
+                            className="flex w-full flex-col items-start gap-1 rounded-[14px] bg-slate-50/85 px-3 py-2.5 text-left transition-colors hover:bg-slate-100 disabled:cursor-default disabled:opacity-70"
                             disabled={!onOpenBacklinkDocument}
-                            onMouseEnter={(event) => {
-                              clearHoverCloseTimeout();
-                              setHoveredSimilarDocumentId(associatedDocument.documentId);
-
-                              if (!hasHoverPreview) {
-                                setHoverPreview(null);
-                                return;
-                              }
-
-                              setHoverPreview({
-                                documentId: associatedDocument.documentId,
-                                title: associatedDocument.title,
-                                similarityEvidence: associatedDocument.similarityEvidence,
-                                textEvidence: associatedDocument.textEvidence,
-                                rect: event.currentTarget.getBoundingClientRect(),
-                              });
-                            }}
-                            onMouseLeave={scheduleHideHoverPreview}
                             onClick={() => {
                               if (!onOpenBacklinkDocument) {
                                 return;
                               }
 
                               onOpenBacklinkDocument({
-                                documentId: associatedDocument.documentId,
+                                documentId: detailAssociatedDocument.documentId,
+                                blockId: evidence.blockId,
+                                fallbackText: evidence.searchText,
+                                highlightQuery: evidence.searchText,
                               });
                             }}
                           >
-                            <span
-                              className={[
-                                'mt-[2px] shrink-0 transition-colors',
-                                isHovered ? 'text-violet-500' : 'text-slate-400 group-hover:text-slate-500',
-                              ].join(' ')}
-                            >
-                              <Sparkles size={13} />
+                            <span className="text-[11px] font-semibold text-violet-500">
+                              {evidence.reason || evidence.label}
                             </span>
-                            <span className="min-w-0 flex-1">
-                              <span
-                                className={[
-                                  'block truncate text-[13px] font-medium transition-colors',
-                                  isHovered ? 'text-slate-900' : 'text-slate-700 group-hover:text-slate-900',
-                                ].join(' ')}
-                              >
-                                {associatedDocument.title}
-                              </span>
-                              {associatedDocument.badges.length > 0 ? (
-                                <span className="mt-1 flex flex-wrap gap-1">
-                                  {associatedDocument.badges.map((badge) => (
-                                    <span
-                                      key={`${associatedDocument.documentId}-${badge}`}
-                                      className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-blue-600 ring-1 ring-blue-100"
-                                    >
-                                      {badge}
-                                    </span>
-                                  ))}
-                                </span>
-                              ) : null}
-                              {evidenceSummary ? (
-                                <span className="mt-1 block truncate text-[11px] text-slate-400">{evidenceSummary}</span>
-                              ) : null}
+                            <span className="text-[12px] leading-[1.6] text-slate-700">
+                              {truncatePreviewText(evidence.snippet || evidence.searchText, 96)}
                             </span>
                           </button>
-                          {hasHoverPreview && isHovered ? <span className="sr-only">显示关联证据预览</span> : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className={referenceEmptyStateClassName}>
-                    {focusedOutlineItemId ? '当前区块暂无关联文档' : '暂未发现关联文档'}
-                  </div>
-                )
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {detailAssociatedDocument.textEvidence.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className={referenceSectionLabelStyle}>原文命中</p>
+                      <div className="space-y-2">
+                        {detailAssociatedDocument.textEvidence.map((evidence, index) => (
+                          <button
+                            type="button"
+                            key={`${detailAssociatedDocument.documentId}-detail-text-${evidence.blockId}-${index}`}
+                            aria-label={`打开原文证据 ${detailAssociatedDocument.title} / ${evidence.matchedText}`}
+                            className="flex w-full flex-col items-start gap-1 rounded-[14px] bg-blue-50/70 px-3 py-2.5 text-left transition-colors hover:bg-blue-50 disabled:cursor-default disabled:opacity-70"
+                            disabled={!onOpenBacklinkDocument}
+                            onClick={() => {
+                              if (!onOpenBacklinkDocument) {
+                                return;
+                              }
+
+                              onOpenBacklinkDocument({
+                                documentId: evidence.documentId,
+                                blockId: evidence.blockId,
+                                fallbackText: evidence.snippet || evidence.matchedText,
+                                highlightQuery: evidence.matchedText,
+                              });
+                            }}
+                          >
+                            <span className="text-[11px] font-semibold text-blue-600">{evidence.reason}</span>
+                            <span className="text-[12px] leading-[1.6] text-slate-700">
+                              {truncatePreviewText(evidence.snippet || evidence.matchedText, 96)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {getAssociatedDocumentEvidenceCount(detailAssociatedDocument) === 0 ? (
+                    <div className={referenceEmptyStateClassName}>当前推荐暂无可跳转线索</div>
+                  ) : null}
+                </div>
               ) : (
-                <div className={referenceEmptyStateClassName}>请选择文稿以查看知识关联</div>
+                <>
+                  <p className={referenceSectionLabelStyle}>关联文档</p>
+                  {activeDocument ? (
+                    hasAssociatedDocumentResults ? (
+                      <div className="divide-y divide-slate-100/90">
+                        {associatedDocuments.map((associatedDocument) => {
+                          const evidenceSummary = getAssociatedDocumentEvidenceSummary(associatedDocument);
+                          const hasHoverPreview = getAssociatedDocumentEvidenceCount(associatedDocument) > 0;
+                          const isHovered =
+                            hoveredSimilarDocumentId === associatedDocument.documentId ||
+                            hoverPreview?.documentId === associatedDocument.documentId;
+
+                          return (
+                            <div
+                              key={associatedDocument.documentId}
+                              className={[
+                                'relative flex items-start gap-1 rounded-[10px] transition-colors duration-200 hover:bg-slate-100/70',
+                                isHovered ? 'bg-slate-100/85' : '',
+                              ].join(' ')}
+                            >
+                              <button
+                                type="button"
+                                aria-label={`打开关联文档 ${associatedDocument.title}`}
+                                className="group flex min-w-0 flex-1 items-start gap-2.5 px-1.5 py-2.5 text-left disabled:cursor-default disabled:opacity-75"
+                                disabled={!onOpenBacklinkDocument}
+                                onMouseEnter={(event) => {
+                                  clearHoverCloseTimeout();
+                                  setHoveredSimilarDocumentId(associatedDocument.documentId);
+
+                                  if (!hasHoverPreview) {
+                                    setHoverPreview(null);
+                                    return;
+                                  }
+
+                                  setHoverPreview({
+                                    documentId: associatedDocument.documentId,
+                                    title: associatedDocument.title,
+                                    similarityEvidence: associatedDocument.similarityEvidence,
+                                    textEvidence: associatedDocument.textEvidence,
+                                    rect: event.currentTarget.getBoundingClientRect(),
+                                  });
+                                }}
+                                onMouseLeave={scheduleHideHoverPreview}
+                                onClick={() => {
+                                  if (!onOpenBacklinkDocument) {
+                                    return;
+                                  }
+
+                                  onOpenBacklinkDocument({
+                                    documentId: associatedDocument.documentId,
+                                  });
+                                }}
+                              >
+                                <span
+                                  className={[
+                                    'mt-[2px] shrink-0 transition-colors',
+                                    isHovered ? 'text-violet-500' : 'text-slate-400 group-hover:text-slate-500',
+                                  ].join(' ')}
+                                >
+                                  <Sparkles size={13} />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span
+                                    className={[
+                                      'block truncate text-[13px] font-medium transition-colors',
+                                      isHovered ? 'text-slate-900' : 'text-slate-700 group-hover:text-slate-900',
+                                    ].join(' ')}
+                                  >
+                                    {associatedDocument.title}
+                                  </span>
+                                  <span className="mt-1 flex flex-wrap gap-1">
+                                    <span
+                                      className={[
+                                        'rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ring-1',
+                                        evidenceStrengthClassNames[associatedDocument.evidenceStrength],
+                                      ].join(' ')}
+                                    >
+                                      {associatedDocument.recommendationReason}
+                                    </span>
+                                    {associatedDocument.badges.map((badge) => (
+                                      <span
+                                        key={`${associatedDocument.documentId}-${badge}`}
+                                        className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-blue-600 ring-1 ring-blue-100"
+                                      >
+                                        {badge}
+                                      </span>
+                                    ))}
+                                  </span>
+                                  {evidenceSummary ? (
+                                    <span className="mt-1 block truncate text-[11px] text-slate-400">
+                                      {evidenceSummary}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`查看全部线索 ${associatedDocument.title}`}
+                                className="mr-1 mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-slate-400 transition-colors hover:bg-white hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+                                onMouseEnter={hideHoverPreview}
+                                onClick={() => {
+                                  hideHoverPreview();
+                                  setDetailAssociatedDocumentId(associatedDocument.documentId);
+                                }}
+                              >
+                                <ListTree size={13} />
+                              </button>
+                              {hasHoverPreview && isHovered ? <span className="sr-only">显示关联证据预览</span> : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className={referenceEmptyStateClassName}>
+                        {focusedOutlineItemId ? '当前区块暂无关联文档' : '暂未发现关联文档'}
+                      </div>
+                    )
+                  ) : (
+                    <div className={referenceEmptyStateClassName}>请选择文稿以查看知识关联</div>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -207,6 +207,8 @@ test('renders aggregated associated document evidence in the wiki tab', async ()
             folderPath: '产品策略',
             score: 12,
             badges: ['主题相似', '原文命中'],
+            recommendationReason: '命中关键句',
+            evidenceStrength: 'high',
             similarityEvidence: [
               {
                 blockId: 'semantic-match',
@@ -249,6 +251,31 @@ test('renders aggregated associated document evidence in the wiki tab', async ()
   expect(screen.getByText('原文命中')).toBeInTheDocument();
   expect(screen.getByText('1 处相似 · 1 条线索')).toBeInTheDocument();
   expect(screen.queryByText('原文线索')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: '查看全部线索 问题清单宣贯稿内容' }));
+
+  expect(screen.getByText('全部线索')).toBeInTheDocument();
+  expect(screen.getByText('问题清单宣贯稿内容')).toBeInTheDocument();
+  expect(screen.getAllByText('命中关键句').length).toBeGreaterThan(0);
+  expect(screen.getByText('相似证据')).toBeInTheDocument();
+  expect(screen.getAllByText('原文命中').length).toBeGreaterThan(0);
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: '打开原文证据 问题清单宣贯稿内容 / 公司坚定不移践行产品化路线',
+    }),
+  );
+
+  expect(handleOpenBacklinkDocument).toHaveBeenCalledWith({
+    documentId: 'doc-evidence',
+    blockId: 'long-context',
+    fallbackText: expect.stringContaining('公司坚定不移践行产品化路线'),
+    highlightQuery: '公司坚定不移践行产品化路线',
+  });
+  handleOpenBacklinkDocument.mockClear();
+
+  fireEvent.click(screen.getByRole('button', { name: '返回关联文档列表' }));
+  expect(screen.getByRole('button', { name: '打开关联文档 问题清单宣贯稿内容' })).toBeInTheDocument();
 
   fireEvent.mouseEnter(screen.getByRole('button', { name: '打开关联文档 问题清单宣贯稿内容' }));
 
