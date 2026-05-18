@@ -7,7 +7,7 @@
 > - 最后更新：2026-05-15
 > - 产品范围：WorkKnowlage 本地知识工作台
 > - 文档定位：项目级 PRD，负责产品方向、功能范围、需求说明、里程碑和风险
-> - 关联文档：`README.md`、`docs/agents/`、`.scratch/`
+> - 关联文档：`README.md`、`docs/requirements/CURRENT_MILESTONE.md`、`docs/agents/`
 
 ---
 
