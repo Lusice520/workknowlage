@@ -111,6 +111,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 
 2026-05-18: For WorkKnowlage requirements, avoid maintaining separate long-lived design docs and feature SPECs for the same single feature. Put product background,方案取舍, flows, states, boundaries, and acceptance criteria into the flat feature SPEC under `docs/requirements/specs/`. Implementation plans are execution artifacts for coding sessions; only create or keep them when actively implementing multi-step code changes, and do not treat them as product source-of-truth.
 
+2026-05-18: When consolidating WorkKnowlage design docs into a feature SPEC, preserve the full useful content instead of compressing it into a short summary. Merge background, trade-off analysis, product shape, data flow, model boundaries, implementation breakdown, validation commands, and non-goals into the SPEC when those details are still relevant. The goal is fewer source-of-truth files, not less information.
+
 ## How to Add Lessons
 
 当 bug、用户纠正或 architectural decision 会影响未来工作时，追加一条简短 dated note，包含：
