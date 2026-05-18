@@ -75,6 +75,8 @@ export interface SidebarAssociatedDocument {
   folderPath: string;
   score: number;
   badges: SidebarAssociatedDocumentBadge[];
+  recommendationReason: string;
+  evidenceStrength: 'high' | 'medium' | 'low';
   similarityEvidence: SidebarAssociatedDocumentEvidence[];
   textEvidence: SidebarTextEvidence[];
 }
@@ -643,6 +645,41 @@ const addAssociatedDocumentBadge = (
   }
 };
 
+const getAssociatedDocumentRecommendationReason = (document: SidebarAssociatedDocument): string => {
+  if (document.textEvidence.length > 0) {
+    const hasKeySentence = document.textEvidence.some((evidence) => evidence.reason.includes('关键句'));
+    if (hasKeySentence) {
+      return '命中关键句';
+    }
+
+    return `${document.textEvidence.length} 条原文线索`;
+  }
+
+  if (document.badges.includes('局部相似')) {
+    return '局部内容相似';
+  }
+
+  if (document.badges.includes('主题相似')) {
+    return '主题相似';
+  }
+
+  return '相关文档';
+};
+
+const getAssociatedDocumentEvidenceStrength = (
+  document: SidebarAssociatedDocument,
+): SidebarAssociatedDocument['evidenceStrength'] => {
+  if (document.textEvidence.length > 0) {
+    return 'high';
+  }
+
+  if (document.badges.includes('局部相似')) {
+    return 'medium';
+  }
+
+  return 'low';
+};
+
 const deriveAssociatedDocuments = ({
   relatedDocumentScores,
   similarBlocks,
@@ -681,6 +718,8 @@ const deriveAssociatedDocuments = ({
       folderPath: document ? getFolderPathLabel(folders, document.folderId) : '',
       score,
       badges: [],
+      recommendationReason: '相关文档',
+      evidenceStrength: 'low',
       similarityEvidence: [],
       textEvidence: [],
     };
@@ -734,7 +773,13 @@ const deriveAssociatedDocuments = ({
     associatedDocument.textEvidence.push(evidence);
   });
 
-  return Array.from(associatedDocumentMap.values()).sort((left, right) => {
+  const associatedDocuments = Array.from(associatedDocumentMap.values()).map((document) => ({
+    ...document,
+    recommendationReason: getAssociatedDocumentRecommendationReason(document),
+    evidenceStrength: getAssociatedDocumentEvidenceStrength(document),
+  }));
+
+  return associatedDocuments.sort((left, right) => {
     const leftEvidenceCount = left.similarityEvidence.length + left.textEvidence.length;
     const rightEvidenceCount = right.similarityEvidence.length + right.textEvidence.length;
     const leftHasTextEvidence = left.textEvidence.length > 0 ? 1 : 0;

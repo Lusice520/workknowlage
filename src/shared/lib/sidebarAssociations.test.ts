@@ -416,6 +416,8 @@ describe('deriveSidebarAssociations', () => {
         documentId: 'doc-target',
         title: '问题清单宣贯稿内容',
         badges: expect.arrayContaining(['主题相似', '原文命中']),
+        recommendationReason: '命中关键句',
+        evidenceStrength: 'high',
         similarityEvidence: expect.arrayContaining([
           expect.objectContaining({ blockId: 'semantic-match' }),
         ]),
@@ -498,10 +500,59 @@ describe('deriveSidebarAssociations', () => {
         documentId: 'doc-target',
         title: '无标题文档',
         badges: ['原文命中'],
+        recommendationReason: '2 条原文线索',
+        evidenceStrength: 'high',
         textEvidence: expect.arrayContaining([
           expect.objectContaining({ matchedText: 'LC 点位是否正确' }),
           expect.objectContaining({ matchedText: '设备动作是否正常' }),
         ]),
+      }),
+    );
+  });
+
+  test('explains topic-only associated documents with low evidence strength', () => {
+    const activeDocument = buildDocument({
+      id: 'doc-active',
+      title: '知识关联侧栏',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'semantic-context',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: '知识库语义面板需要展示被引用、被提及和相似内容。', styles: {} }],
+          children: [],
+        },
+      ]),
+    });
+
+    const targetDocument = buildDocument({
+      id: 'doc-target',
+      title: '关系图方案',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'semantic-match',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: '知识库语义面板应该展示被引用和被提及的内容。', styles: {} }],
+          children: [],
+        },
+      ]),
+    });
+
+    const result = deriveSidebarAssociations({
+      activeDocument,
+      documents: [activeDocument, targetDocument],
+      folders,
+    });
+
+    expect(result.associatedDocuments).toContainEqual(
+      expect.objectContaining({
+        documentId: 'doc-target',
+        badges: ['主题相似'],
+        recommendationReason: '主题相似',
+        evidenceStrength: 'low',
       }),
     );
   });
