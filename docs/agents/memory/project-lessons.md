@@ -119,6 +119,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 
 2026-05-18: SQLite `datetime('now')` returns UTC strings without a timezone suffix. When showing document timestamps, treat `YYYY-MM-DD HH:mm:ss` as UTC storage and format it into the user's local timezone before displaying; otherwise WorkKnowlage appears eight hours behind on China Standard Time systems.
 
+2026-05-19: WorkKnowlage 表格文档不是普通文稿的另一种内容块。表格态应优先给在线 Spreadsheet 画布让出空间，避免复用右侧“文稿概览 / Wiki / 文稿脉络”信息栏。集成 Univer 时必须显式注册当前语言包，并为表格 preset 提供可打包的 module worker；否则会出现空白容器或运行时 `[LocaleService]: Locale not initialized`。
+
 ## How to Add Lessons
 
 当 bug、用户纠正或 architectural decision 会影响未来工作时，追加一条简短 dated note，包含：

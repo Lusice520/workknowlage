@@ -17,10 +17,14 @@ import type {
   Space,
   WorkspaceCollectionView,
 } from '../../shared/types/workspace';
-import type { TrashItemRecord } from '../../shared/types/preload';
+import type { SpreadsheetWorkbookRecord, TrashItemRecord } from '../../shared/types/preload';
 
 const LazyEditorHost = lazy(() =>
   import('../editor-host/EditorHost').then((module) => ({ default: module.EditorHost }))
+);
+
+const LazySpreadsheetEditorHost = lazy(() =>
+  import('../spreadsheet/SpreadsheetEditorHost').then((module) => ({ default: module.SpreadsheetEditorHost }))
 );
 
 const quickNoteCenterPaneModulePromise = import('./QuickNoteCenterPane');
@@ -89,6 +93,8 @@ interface CenterPaneProps {
   onFocusDiagnostic?: (diagnostic: EditorHostFocusDiagnostic) => void;
   onFocusTargetConsumed?: (requestKey: number) => void;
   onSaveDocumentContent: (documentId: string, contentJson: string) => Promise<unknown>;
+  onLoadSpreadsheetWorkbook: (documentId: string) => Promise<SpreadsheetWorkbookRecord | null>;
+  onSaveSpreadsheetWorkbook: (documentId: string, workbookJson: string) => Promise<SpreadsheetWorkbookRecord>;
   onSaveQuickNoteContent: (noteDate: string, contentJson: string) => Promise<QuickNoteRecord>;
   onCaptureQuickNote: (noteDate: string) => Promise<unknown>;
   onUploadFiles: (documentId: string, files: File[]) => Promise<string[]>;
@@ -127,6 +133,8 @@ export function CenterPane({
   onFocusDiagnostic,
   onFocusTargetConsumed,
   onSaveDocumentContent,
+  onLoadSpreadsheetWorkbook,
+  onSaveSpreadsheetWorkbook,
   onSaveQuickNoteContent,
   onCaptureQuickNote,
   onUploadFiles,
@@ -272,6 +280,7 @@ export function CenterPane({
   }
 
   const hasShare = Boolean(String(shareInfo?.token || '').trim());
+  const isSpreadsheetDocument = activeDocument.kind === 'spreadsheet';
   const isFavorite = Boolean(activeDocument.isFavorite);
   const favoriteLabel = `${isFavorite ? '取消收藏' : '收藏'}文档 ${activeDocument.title}`;
   const shareLabel = shareLoading ? '检查分享' : (hasShare ? '分享已开启' : '分享');
@@ -344,135 +353,139 @@ export function CenterPane({
           >
             <Star size={15} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="分享"
-              title={shareLabel}
-              className={`flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60 ${
-                hasShare ? 'text-blue-600' : 'text-[var(--wk-ink-soft)]'
-              }`}
-              onClick={() => {
-                setExportMenuOpen(false);
-                setShareMenuOpen((current) => !current);
-              }}
-              disabled={shareBusy || shareLoading}
-            >
-              <Share2 size={15} />
-              <span>分享</span>
-              <ChevronDown size={12} />
-            </button>
-            {shareMenuOpen ? (
-              <div
-                role="menu"
-                className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
-              >
+          {!isSpreadsheetDocument ? (
+            <>
+              <div className="relative">
                 <button
                   type="button"
-                  role="menuitem"
-                  className={`${sharedMenuItemClassName} !gap-2`}
-                  onClick={async () => {
-                    setShareMenuOpen(false);
-                    await onShareDocument(activeDocument.id, getCurrentContentJson());
+                  aria-label="分享"
+                  title={shareLabel}
+                  className={`flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                    hasShare ? 'text-blue-600' : 'text-[var(--wk-ink-soft)]'
+                  }`}
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    setShareMenuOpen((current) => !current);
                   }}
                   disabled={shareBusy || shareLoading}
                 >
-                  <Share2 size={14} />
-                  <span>{primaryShareActionLabel}</span>
+                  <Share2 size={15} />
+                  <span>分享</span>
+                  <ChevronDown size={12} />
                 </button>
-                {hasShare ? (
-                  <>
+                {shareMenuOpen ? (
+                  <div
+                    role="menu"
+                    className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
+                  >
                     <button
                       type="button"
                       role="menuitem"
                       className={`${sharedMenuItemClassName} !gap-2`}
                       onClick={async () => {
                         setShareMenuOpen(false);
-                        await onRegenerateShareDocument(activeDocument.id, getCurrentContentJson());
+                        await onShareDocument(activeDocument.id, getCurrentContentJson());
                       }}
                       disabled={shareBusy || shareLoading}
                     >
-                      <RefreshCw size={14} />
-                      <span>刷新分享地址</span>
+                      <Share2 size={14} />
+                      <span>{primaryShareActionLabel}</span>
+                    </button>
+                    {hasShare ? (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={`${sharedMenuItemClassName} !gap-2`}
+                          onClick={async () => {
+                            setShareMenuOpen(false);
+                            await onRegenerateShareDocument(activeDocument.id, getCurrentContentJson());
+                          }}
+                          disabled={shareBusy || shareLoading}
+                        >
+                          <RefreshCw size={14} />
+                          <span>刷新分享地址</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={`${sharedMenuItemClassName} !gap-2 !text-rose-600 hover:!text-rose-700`}
+                          onClick={async () => {
+                            setShareMenuOpen(false);
+                            await onDisableShareDocument(activeDocument.id);
+                          }}
+                          disabled={shareBusy || shareLoading}
+                        >
+                          <Link2Off size={14} />
+                          <span>{disableShareLabel}</span>
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="导出"
+                  title={exportStatusText || '导出文档'}
+                  className="flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium text-[var(--wk-ink-soft)] transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => {
+                    setShareMenuOpen(false);
+                    setExportMenuOpen((current) => !current);
+                  }}
+                  disabled={exportBusy}
+                >
+                  {exportBusy ? <LoaderCircle size={15} className="animate-spin" /> : <Download size={15} />}
+                  <span>导出</span>
+                  <ChevronDown size={12} />
+                </button>
+                {exportMenuOpen ? (
+                  <div
+                    role="menu"
+                    className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={sharedMenuItemClassName}
+                      onClick={async () => {
+                        setExportMenuOpen(false);
+                        await onExportMarkdown();
+                      }}
+                      disabled={exportBusy}
+                    >
+                      导出 Markdown
                     </button>
                     <button
                       type="button"
                       role="menuitem"
-                      className={`${sharedMenuItemClassName} !gap-2 !text-rose-600 hover:!text-rose-700`}
+                      className={sharedMenuItemClassName}
                       onClick={async () => {
-                        setShareMenuOpen(false);
-                        await onDisableShareDocument(activeDocument.id);
+                        setExportMenuOpen(false);
+                        await onExportPdf();
                       }}
-                      disabled={shareBusy || shareLoading}
+                      disabled={exportBusy}
                     >
-                      <Link2Off size={14} />
-                      <span>{disableShareLabel}</span>
+                      导出 PDF
                     </button>
-                  </>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={sharedMenuItemClassName}
+                      onClick={async () => {
+                        setExportMenuOpen(false);
+                        await onExportWord();
+                      }}
+                      disabled={exportBusy}
+                    >
+                      导出 Word
+                    </button>
+                  </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="导出"
-              title={exportStatusText || '导出文档'}
-              className="flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium text-[var(--wk-ink-soft)] transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => {
-                setShareMenuOpen(false);
-                setExportMenuOpen((current) => !current);
-              }}
-              disabled={exportBusy}
-            >
-              {exportBusy ? <LoaderCircle size={15} className="animate-spin" /> : <Download size={15} />}
-              <span>导出</span>
-              <ChevronDown size={12} />
-            </button>
-            {exportMenuOpen ? (
-              <div
-                role="menu"
-                className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={sharedMenuItemClassName}
-                  onClick={async () => {
-                    setExportMenuOpen(false);
-                    await onExportMarkdown();
-                  }}
-                  disabled={exportBusy}
-                >
-                  导出 Markdown
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={sharedMenuItemClassName}
-                  onClick={async () => {
-                    setExportMenuOpen(false);
-                    await onExportPdf();
-                  }}
-                  disabled={exportBusy}
-                >
-                  导出 PDF
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={sharedMenuItemClassName}
-                  onClick={async () => {
-                    setExportMenuOpen(false);
-                    await onExportWord();
-                  }}
-                  disabled={exportBusy}
-                >
-                  导出 Word
-                </button>
-              </div>
-            ) : null}
-          </div>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -483,18 +496,27 @@ export function CenterPane({
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--wk-muted)]">
             <span>{activeDocument.updatedAtLabel}</span>
-            <span>{activeDocument.wordCountLabel}</span>
-            <span className="h-1 w-1 rounded-full bg-[rgba(148,163,184,0.9)]" />
-            <span className="rounded-full bg-[rgba(59,130,246,0.08)] px-3 py-1 text-[11px] font-medium text-[var(--wk-accent)]">
-              #{activeDocument.badgeLabel}
-            </span>
-            <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${shareMetaToneClass}`}>
-              {shareStatusText || '分享未开启'}
-            </span>
-            {exportStatusText ? (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
-                {exportStatusText}
+            {isSpreadsheetDocument ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
+                表格
               </span>
+            ) : null}
+            {!isSpreadsheetDocument ? (
+              <>
+                <span>{activeDocument.wordCountLabel}</span>
+                <span className="h-1 w-1 rounded-full bg-[rgba(148,163,184,0.9)]" />
+                <span className="rounded-full bg-[rgba(59,130,246,0.08)] px-3 py-1 text-[11px] font-medium text-[var(--wk-accent)]">
+                  #{activeDocument.badgeLabel}
+                </span>
+                <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${shareMetaToneClass}`}>
+                  {shareStatusText || '分享未开启'}
+                </span>
+                {exportStatusText ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
+                    {exportStatusText}
+                  </span>
+                ) : null}
+              </>
             ) : null}
           </div>
         </div>
@@ -504,21 +526,31 @@ export function CenterPane({
             <CenterPaneBodyLoading description="正在加载编辑器..." />
           }
         >
-        <LazyEditorHost
-          document={activeDocument}
-          mentionDocuments={mentionDocuments}
-          onSaveDocumentContent={onSaveDocumentContent}
-          onUploadFiles={onUploadFiles}
-          onSaveStatusChange={setSaveStatus}
-          onFocusDiagnostic={onFocusDiagnostic}
-          onFocusTargetConsumed={onFocusTargetConsumed}
-          focusTarget={
-            documentFocusTarget?.documentId === activeDocument.id
-              ? documentFocusTarget
-              : null
-          }
-          onContentSnapshotReady={handleContentSnapshotReady}
-        />
+        {isSpreadsheetDocument ? (
+          <LazySpreadsheetEditorHost
+            document={activeDocument}
+            onLoadSpreadsheetWorkbook={onLoadSpreadsheetWorkbook}
+            onSaveSpreadsheetWorkbook={onSaveSpreadsheetWorkbook}
+            onSaveStatusChange={setSaveStatus}
+            onContentSnapshotReady={handleContentSnapshotReady}
+          />
+        ) : (
+          <LazyEditorHost
+            document={activeDocument}
+            mentionDocuments={mentionDocuments}
+            onSaveDocumentContent={onSaveDocumentContent}
+            onUploadFiles={onUploadFiles}
+            onSaveStatusChange={setSaveStatus}
+            onFocusDiagnostic={onFocusDiagnostic}
+            onFocusTargetConsumed={onFocusTargetConsumed}
+            focusTarget={
+              documentFocusTarget?.documentId === activeDocument.id
+                ? documentFocusTarget
+                : null
+            }
+            onContentSnapshotReady={handleContentSnapshotReady}
+          />
+        )}
         </Suspense>
       </div>
     </section>

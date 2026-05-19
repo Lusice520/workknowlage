@@ -105,6 +105,42 @@ describe('workKnowlageApi', () => {
     expect(updatedDocument.wordCountLabel).toBe('5 字');
   });
 
+  test('stores spreadsheet workbooks through the fallback spreadsheet api', async () => {
+    const api = createFallbackDesktopApi();
+    const document = await api.documents.create({
+      spaceId: 'personal-workspace',
+      folderId: null,
+      title: '预算表',
+      kind: 'spreadsheet',
+    });
+
+    expect(document.kind).toBe('spreadsheet');
+    expect(typeof api.spreadsheets?.get).toBe('function');
+    expect(typeof api.spreadsheets?.update).toBe('function');
+
+    const initialWorkbook = await api.spreadsheets?.get(document.id);
+    expect(initialWorkbook?.workbookJson).toContain('Sheet1');
+
+    const nextWorkbookJson = JSON.stringify({
+      sheets: {
+        sheet1: {
+          cellData: {
+            0: {
+              0: {
+                v: '预算',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(api.spreadsheets?.update(document.id, nextWorkbookJson)).resolves.toMatchObject({
+      documentId: document.id,
+      workbookJson: nextWorkbookJson,
+    });
+  });
+
   test('stores quick notes globally by date and lists month markers', async () => {
     const api = createFallbackDesktopApi();
     const marchContentJson = JSON.stringify([

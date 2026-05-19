@@ -1,5 +1,5 @@
 import { type DragEvent } from 'react';
-import type { DocumentRecord, FolderNode, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, DocumentRecord, FolderNode, WorkspaceState } from '../../shared/types/workspace';
 import { DocumentTreeItem, FolderSection } from './SidebarTreeItems';
 import type { TreeDragState } from './sidebarTreeDnd';
 export interface SidebarTreeProps {
@@ -12,7 +12,7 @@ export interface SidebarTreeProps {
   dropTargetFolderId: string | null;
   onSelectDocument: (documentId: string) => void;
   onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
+  onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;

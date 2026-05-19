@@ -10,10 +10,11 @@ import {
   FolderPlus,
   Pencil,
   Plus,
+  Table2,
   Trash2,
 } from 'lucide-react';
 import { getChildDocuments, getChildFolders, getDocumentsForFolder } from '../../shared/lib/workspaceSelectors';
-import type { DocumentRecord, FolderNode, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, DocumentRecord, FolderNode, WorkspaceState } from '../../shared/types/workspace';
 import {
   createDocumentDragState,
   createFolderDragState,
@@ -54,7 +55,7 @@ interface DocumentTreeItemProps {
   dropTargetFolderId: string | null;
   onSelectDocument: (documentId: string) => void;
   onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
+  onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
@@ -110,6 +111,7 @@ export function DocumentTreeItem({
   const hasChildren = childFolders.length > 0 || childDocuments.length > 0;
   const isExpanded = state.expandedFolderIds.includes(document.id);
   const isDropTarget = dropTargetFolderId === document.id;
+  const DocumentIcon = document.kind === 'spreadsheet' ? Table2 : FileText;
 
   return (
     <section className="space-y-0.5">
@@ -165,9 +167,17 @@ export function DocumentTreeItem({
             {hasChildren ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
           </button>
           <span className={treeIconSlotClass}>
-            <FileText
+            <DocumentIcon
               size={14}
-              className={`shrink-0 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-500'}`}
+              className={`shrink-0 transition-colors duration-200 ${
+                document.kind === 'spreadsheet'
+                  ? isActive
+                    ? 'text-emerald-600'
+                    : 'text-emerald-500/75 group-hover:text-emerald-600'
+                  : isActive
+                    ? 'text-blue-500'
+                    : 'text-slate-400 group-hover:text-slate-500'
+              }`}
             />
           </span>
           {isDocEditing ? (
@@ -204,6 +214,13 @@ export function DocumentTreeItem({
                   icon: FilePlus2,
                   onClick: () => {
                     void onCreateDocument(document.id);
+                  },
+                },
+                {
+                  label: '新建 Excel',
+                  icon: Table2,
+                  onClick: () => {
+                    void onCreateDocument(document.id, { kind: 'spreadsheet' });
                   },
                 },
                 {
@@ -323,7 +340,7 @@ interface FolderSectionProps {
   dropTargetFolderId: string | null;
   onSelectDocument: (documentId: string) => void;
   onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
+  onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
@@ -455,6 +472,13 @@ export function FolderSection({
                   icon: FilePlus2,
                   onClick: () => {
                     void onCreateDocument(folder.id);
+                  },
+                },
+                {
+                  label: '新建 Excel',
+                  icon: Table2,
+                  onClick: () => {
+                    void onCreateDocument(folder.id, { kind: 'spreadsheet' });
                   },
                 },
                 {

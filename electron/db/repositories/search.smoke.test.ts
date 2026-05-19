@@ -78,6 +78,26 @@ test('indexes seeded content and persists workspace search results across reopen
         }),
       ])
     );
+    expect(smokeResult.spreadsheetTitleHits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'document',
+          title: 'Smoke Budget 预算表',
+          spaceId: smokeResult.spaceId,
+        }),
+      ])
+    );
+    expect(smokeResult.spreadsheetCellHits).toEqual([]);
+    expect(smokeResult.persistedSpreadsheetTitleHits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'document',
+          title: 'Smoke Budget 预算表',
+          spaceId: smokeResult.spaceId,
+        }),
+      ])
+    );
+    expect(smokeResult.persistedSpreadsheetCellHits).toEqual([]);
   } finally {
     await fs.rm(userDataDir, { recursive: true, force: true });
   }

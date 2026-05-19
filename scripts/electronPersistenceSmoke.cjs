@@ -9,6 +9,7 @@ const {
 const spacesRepo = require('../electron/db/repositories/spaces.cjs');
 const foldersRepo = require('../electron/db/repositories/folders.cjs');
 const documentsRepo = require('../electron/db/repositories/documents.cjs');
+const spreadsheetsRepo = require('../electron/db/repositories/spreadsheets.cjs');
 const { rebuildBacklinksForSpace } = require('../electron/db/repositories/backlinks.cjs');
 const quickNotesRepo = require('../electron/db/repositories/quickNotes.cjs');
 const searchRepo = require('../electron/db/repositories/search.cjs');
@@ -120,6 +121,37 @@ async function runSmoke() {
     contentJson: smokeQuickNoteContentJson,
   });
 
+  const spreadsheetDocument = documentsRepo.createDocument({
+    spaceId: space.id,
+    folderId: folder.id,
+    title: 'Smoke Budget Sheet',
+    kind: 'spreadsheet',
+  });
+  const spreadsheetWorkbookJson = JSON.stringify({
+    id: 'smoke-budget-workbook',
+    name: 'Smoke Budget Sheet',
+    appVersion: '0.23.0',
+    locale: 'zhCN',
+    styles: {},
+    sheetOrder: ['sheet-1'],
+    sheets: {
+      'sheet-1': {
+        id: 'sheet-1',
+        name: 'Sheet1',
+        rowCount: 100,
+        columnCount: 26,
+        cellData: {
+          0: {
+            0: {
+              v: 'Q1 Budget',
+            },
+          },
+        },
+      },
+    },
+  });
+  spreadsheetsRepo.updateSpreadsheetWorkbook(spreadsheetDocument.id, spreadsheetWorkbookJson);
+
   closeDatabase();
 
   const backupRootDir = path.join(userDataDir, 'smoke-backups');
@@ -135,6 +167,29 @@ async function runSmoke() {
     title: 'Mutated After Backup',
     contentJson: JSON.stringify([]),
   });
+  spreadsheetsRepo.updateSpreadsheetWorkbook(spreadsheetDocument.id, JSON.stringify({
+    id: 'smoke-budget-workbook-mutated',
+    name: 'Mutated Budget Sheet',
+    appVersion: '0.23.0',
+    locale: 'zhCN',
+    styles: {},
+    sheetOrder: ['sheet-1'],
+    sheets: {
+      'sheet-1': {
+        id: 'sheet-1',
+        name: 'Sheet1',
+        rowCount: 100,
+        columnCount: 26,
+        cellData: {
+          0: {
+            0: {
+              v: 'Mutated Budget',
+            },
+          },
+        },
+      },
+    },
+  }));
   fs.rmSync(uploadedAsset.filePath, { force: true });
   closeDatabase();
 
@@ -150,15 +205,27 @@ async function runSmoke() {
   const restoredSpace = spacesRepo.listSpaces().find((item) => item.id === space.id);
   const restoredFolder = foldersRepo.listFolders(space.id).find((item) => item.id === folder.id);
   const restoredDocument = documentsRepo.getDocumentById(document.id);
+  const restoredSpreadsheetDocument = documentsRepo.getDocumentById(spreadsheetDocument.id);
+  const restoredSpreadsheetWorkbook = spreadsheetsRepo.getSpreadsheetWorkbook(spreadsheetDocument.id);
   const restoredMentionTarget = documentsRepo.getDocumentById(mentionTargetDocument.id);
   const restoredQuickNote = quickNotesRepo.getQuickNote(space.id, '2026-03-26');
 
-  if (!restoredSpace || !restoredFolder || !restoredDocument || !restoredMentionTarget || !restoredQuickNote) {
+  if (
+    !restoredSpace ||
+    !restoredFolder ||
+    !restoredDocument ||
+    !restoredSpreadsheetDocument ||
+    !restoredSpreadsheetWorkbook ||
+    !restoredMentionTarget ||
+    !restoredQuickNote
+  ) {
     throw new Error('Smoke persistence verification failed');
   }
 
   const persistedBacklink = restoredMentionTarget.backlinks.find((backlink) => backlink.sourceDocumentId === document.id);
   const visibleAfterReopen = Boolean(persistedBacklink);
+  const restoredWorkbookSnapshot = JSON.parse(restoredSpreadsheetWorkbook.workbookJson);
+  const restoredSpreadsheetCellValue = restoredWorkbookSnapshot?.sheets?.['sheet-1']?.cellData?.[0]?.[0]?.v ?? null;
 
   const orphanDir = uploadStorage.getDocumentUploadDir('missing-document');
   fs.mkdirSync(orphanDir, { recursive: true });
@@ -217,6 +284,11 @@ async function runSmoke() {
       documentTitle: restoredDocument.title,
       attachmentRestored,
       quickNoteAttachmentRestored,
+    },
+    spreadsheet: {
+      documentKind: restoredSpreadsheetDocument.kind,
+      title: restoredSpreadsheetDocument.title,
+      workbookCellValue: restoredSpreadsheetCellValue,
     },
     cleanup: {
       deletedFiles: cleanupResult.deletedFiles,

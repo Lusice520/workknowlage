@@ -19,6 +19,32 @@ function generateId() {
   return crypto.randomUUID();
 }
 
+function createDefaultSpreadsheetWorkbook(title = '无标题表格') {
+  return JSON.stringify({
+    id: generateId(),
+    name: title,
+    appVersion: '0.23.0',
+    locale: 'zhCN',
+    styles: {},
+    sheetOrder: ['sheet-1'],
+    sheets: {
+      'sheet-1': {
+        id: 'sheet-1',
+        name: 'Sheet1',
+        rowCount: 100,
+        columnCount: 26,
+        defaultColumnWidth: 88,
+        defaultRowHeight: 24,
+        cellData: {},
+      },
+    },
+  });
+}
+
+function normalizeDocumentKind(kind) {
+  return kind === 'spreadsheet' ? 'spreadsheet' : 'note';
+}
+
 function assembleDocument(row) {
   if (!row) return null;
   const db = getDatabase();
@@ -48,6 +74,7 @@ function assembleDocument(row) {
     spaceId: row.space_id,
     folderId: row.folder_id,
     title: row.title,
+    kind: row.document_kind || 'note',
     contentJson,
     updatedAt: row.updated_at || '',
     updatedAtLabel: formatLocalTimestampLabel(row.updated_at),
@@ -118,14 +145,25 @@ function listDocumentIdsForTrashRoot(spaceId, trashRootId) {
     .map((row) => row.id);
 }
 
-function createDocument({ spaceId, folderId, title }) {
+function createDocument({ spaceId, folderId, title, kind }) {
   const db = getDatabase();
   assertValidParentContainer(db, spaceId, folderId ?? null, 'Document move target is invalid.');
   const id = generateId();
   const emptyContent = JSON.stringify([]);
-  db.prepare(
-    'INSERT INTO documents (id, space_id, folder_id, title, content_json, is_favorite, word_count, badge_label) VALUES (?, ?, ?, ?, ?, 0, 0, ?)'
-  ).run(id, spaceId, folderId ?? null, title, emptyContent, '');
+  const documentKind = normalizeDocumentKind(kind);
+  const createTransaction = db.transaction(() => {
+    db.prepare(
+      'INSERT INTO documents (id, space_id, folder_id, title, document_kind, content_json, is_favorite, word_count, badge_label) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)'
+    ).run(id, spaceId, folderId ?? null, title, documentKind, emptyContent, '');
+
+    if (documentKind === 'spreadsheet') {
+      db.prepare(
+        'INSERT INTO document_spreadsheets (document_id, workbook_json) VALUES (?, ?)'
+      ).run(id, createDefaultSpreadsheetWorkbook(title));
+    }
+  });
+
+  createTransaction();
   return getDocumentById(id);
 }
 

@@ -13,6 +13,10 @@ test('uses a relative asset base for packaged file:// builds', () => {
   expect(viteConfig.base).toBe('./');
 });
 
+test('emits module workers for spreadsheet worker chunks', () => {
+  expect(viteConfig.worker?.format).toBe('es');
+});
+
 test('aliases BlockNote and collaboration package roots away from comment-enabled defaults', () => {
   const aliases = Array.isArray(viteConfig.resolve?.alias) ? viteConfig.resolve.alias : [];
 

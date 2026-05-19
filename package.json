@@ -21,6 +21,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
+    "@univerjs/preset-sheets-core": "^0.23.0",
+    "@univerjs/presets": "^0.23.0",
     "better-sqlite3": "^12.8.0",
     "lucide-react": "^0.575.0",
     "mermaid": "^11.15.0",

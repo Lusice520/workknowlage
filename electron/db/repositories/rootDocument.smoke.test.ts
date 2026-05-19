@@ -52,6 +52,10 @@ test('persists root-level document creation and move in Electron SQLite storage'
       spaceId: smokeResult.spaceId,
     });
     expect(smokeResult.rootSearchHit).not.toHaveProperty('folderId');
+    expect(smokeResult.rootDocumentKind).toBe('note');
+    expect(smokeResult.spreadsheetDocumentKind).toBe('spreadsheet');
+    expect(smokeResult.spreadsheetWorkbookDocumentId).toBeTruthy();
+    expect(() => JSON.parse(smokeResult.spreadsheetWorkbookJson)).not.toThrow();
   } finally {
     await fs.rm(userDataDir, { recursive: true, force: true });
   }

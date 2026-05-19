@@ -71,11 +71,18 @@ export interface DocumentSection {
   caption?: string;
 }
 
+export type DocumentKind = 'note' | 'spreadsheet';
+
+export interface DocumentCreateOptions {
+  kind?: DocumentKind;
+}
+
 export interface DocumentRecord {
   id: string;
   spaceId: string;
   folderId: string | null;
   title: string;
+  kind?: DocumentKind;
   contentJson: string;
   updatedAt?: string;
   updatedAtLabel: string;

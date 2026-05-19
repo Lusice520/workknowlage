@@ -1,5 +1,6 @@
 import type {
   DocumentRecord,
+  DocumentKind,
   DocumentUpdateInput,
   FolderNode,
   QuickNoteMonthEntry,
@@ -58,6 +59,12 @@ export interface ExportActionResult {
   success: boolean;
   message: string;
   path?: string;
+}
+
+export interface SpreadsheetWorkbookRecord {
+  documentId: string;
+  workbookJson: string;
+  updatedAt?: string;
 }
 
 export type TrashItemKind = 'document' | 'folder';
@@ -123,12 +130,17 @@ export interface WorkKnowlageDesktopApi {
   documents: {
     list: (spaceId: string, folderId: string | null) => Promise<DocumentRecord[]>;
     getById: (id: string) => Promise<DocumentRecord | null>;
-    create: (data: { spaceId: string; folderId: string | null; title: string }) => Promise<DocumentRecord>;
+    create: (data: { spaceId: string; folderId: string | null; title: string; kind?: DocumentKind }) => Promise<DocumentRecord>;
     update: (id: string, data: DocumentUpdateInput) => Promise<DocumentRecord>;
     move: (id: string, targetFolderId: string | null) => Promise<DocumentRecord>;
     moveToSpace?: (id: string, targetSpaceId: string) => Promise<void>;
     delete: (id: string) => Promise<void>;
     trash?: (id: string) => Promise<DocumentRecord | null>;
+  };
+
+  spreadsheets?: {
+    get: (documentId: string) => Promise<SpreadsheetWorkbookRecord | null>;
+    update: (documentId: string, workbookJson: string) => Promise<SpreadsheetWorkbookRecord>;
   };
 
   quickNotes: {

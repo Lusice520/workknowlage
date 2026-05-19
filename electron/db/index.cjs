@@ -167,6 +167,20 @@ function migrateDocumentsFavoriteFlag(database) {
   database.exec("ALTER TABLE documents ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0");
 }
 
+function migrateDocumentKind(database) {
+  if (!tableExists(database, 'documents')) {
+    return;
+  }
+
+  const documentColumns = database.prepare('PRAGMA table_info(documents)').all();
+  if (documentColumns.find((column) => column.name === 'document_kind')) {
+    return;
+  }
+
+  console.log('[DB] Adding document_kind column to documents table...');
+  database.exec("ALTER TABLE documents ADD COLUMN document_kind TEXT NOT NULL DEFAULT 'note' CHECK(document_kind IN ('note','spreadsheet'))");
+}
+
 function migrateTrashColumns(database) {
   if (tableExists(database, 'documents')) {
     const documentColumns = database.prepare('PRAGMA table_info(documents)').all();
@@ -275,6 +289,7 @@ function initDatabase() {
   db.exec(SCHEMA_SQL);
   migrateDocumentsFolderIdNullable(db);
   migrateDocumentsFavoriteFlag(db);
+  migrateDocumentKind(db);
   migrateTrashColumns(db);
   migrateBacklinkSourceBlockId(db);
 
