@@ -27,6 +27,14 @@ const buildDocument = (overrides: Partial<DocumentRecord>): DocumentRecord => ({
   ...overrides,
 });
 
+const textBlock = (id: string, type: string, text: string, props: Record<string, unknown> = {}) => ({
+  id,
+  type,
+  props,
+  content: [{ type: 'text', text, styles: {} }],
+  children: [],
+});
+
 describe('deriveSidebarAssociations', () => {
   test('derives similar documents from content overlap only and exposes preview snippets', () => {
     const activeDocument = buildDocument({
@@ -507,6 +515,175 @@ describe('deriveSidebarAssociations', () => {
           expect.objectContaining({ matchedText: '设备动作是否正常' }),
         ]),
       }),
+    );
+  });
+
+  test('derives recommendations from code blocks and alert blocks', () => {
+    const activeDocument = buildDocument({
+      id: 'doc-active',
+      title: '自进化_目录',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock(
+          'agent-directory-code',
+          'codeBlock',
+          [
+            '/Users/lusice/.codex/lusice/',
+            'USER-PROFILE.md',
+            'ASSISTANT-RULES.md',
+            'memory/preferences.md',
+            'memory/workflows.md',
+          ].join('\n'),
+          { language: 'text' },
+        ),
+        textBlock(
+          'agent-project-alert',
+          'alert',
+          '项目执行系统 docs agents memory requirements 负责项目规则和需求文档协作。',
+          { type: 'info' },
+        ),
+      ]),
+    });
+
+    const globalSystemDocument = buildDocument({
+      id: 'doc-global-system',
+      title: '自进化_全局',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock(
+          'global-system-paragraph',
+          'paragraph',
+          '全局协作系统包含 USER-PROFILE、ASSISTANT-RULES、memory preferences 和 workflows。',
+        ),
+      ]),
+    });
+    const projectSystemDocument = buildDocument({
+      id: 'doc-project-system',
+      title: '自进化_项目集',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock(
+          'project-system-paragraph',
+          'paragraph',
+          'docs agents memory 和 requirements 共同定义项目执行系统、项目规则和需求文档协作。',
+        ),
+      ]),
+    });
+
+    const result = deriveSidebarAssociations({
+      activeDocument,
+      documents: [activeDocument, globalSystemDocument, projectSystemDocument],
+      folders,
+    });
+
+    expect(result.associatedDocuments.map((document) => document.documentId)).toEqual(
+      expect.arrayContaining(['doc-global-system', 'doc-project-system']),
+    );
+    expect(result.associatedDocuments).toContainEqual(
+      expect.objectContaining({
+        documentId: 'doc-global-system',
+        badges: expect.arrayContaining(['主题相似']),
+      }),
+    );
+    expect(result.associatedDocuments).toContainEqual(
+      expect.objectContaining({
+        documentId: 'doc-project-system',
+        badges: expect.arrayContaining(['主题相似']),
+      }),
+    );
+  });
+
+  test('derives recommendations from table, rich table, and toggle list text', () => {
+    const activeDocument = buildDocument({
+      id: 'doc-active',
+      title: '知识块推荐覆盖',
+      sections: [],
+      contentJson: JSON.stringify([
+        {
+          id: 'native-table',
+          type: 'table',
+          props: {},
+          content: {
+            type: 'tableContent',
+            headerRows: 1,
+            rows: [
+              {
+                cells: [
+                  { type: 'tableCell', props: {}, content: [{ type: 'text', text: 'Wiki 关联', styles: {} }] },
+                  { type: 'tableCell', props: {}, content: [{ type: 'text', text: '推荐候选 表格证据', styles: {} }] },
+                ],
+              },
+            ],
+          },
+          children: [],
+        },
+        {
+          id: 'rich-table',
+          type: 'richTable',
+          props: {
+            data: JSON.stringify({
+              content: [
+                {
+                  type: 'table',
+                  content: [
+                    {
+                      type: 'tableRow',
+                      content: [
+                        {
+                          type: 'tableCell',
+                          content: [
+                            {
+                              type: 'paragraph',
+                              content: [{ type: 'text', text: '结构化知识 推荐召回 富表格证据', styles: {} }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+          children: [],
+        },
+        textBlock('toggle-directory', 'toggleListItem', '目录型文档 自动推荐 关联线索', {}),
+      ]),
+    });
+
+    const tableDocument = buildDocument({
+      id: 'doc-table',
+      title: 'Wiki 表格推荐',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock('table-match', 'paragraph', 'Wiki 关联推荐候选需要保留表格证据。'),
+      ]),
+    });
+    const richTableDocument = buildDocument({
+      id: 'doc-rich-table',
+      title: '结构化知识召回',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock('rich-table-match', 'paragraph', '结构化知识推荐召回应该识别富表格证据。'),
+      ]),
+    });
+    const toggleDocument = buildDocument({
+      id: 'doc-toggle',
+      title: '目录型文档推荐',
+      sections: [],
+      contentJson: JSON.stringify([
+        textBlock('toggle-match', 'paragraph', '目录型文档需要自动推荐并展示关联线索。'),
+      ]),
+    });
+
+    const result = deriveSidebarAssociations({
+      activeDocument,
+      documents: [activeDocument, tableDocument, richTableDocument, toggleDocument],
+      folders,
+    });
+
+    expect(result.associatedDocuments.map((document) => document.documentId)).toEqual(
+      expect.arrayContaining(['doc-table', 'doc-rich-table', 'doc-toggle']),
     );
   });
 

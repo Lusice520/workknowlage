@@ -10,6 +10,8 @@
 
 2026-05-15: 右侧栏 Wiki 的“相关主题 hover 相似处”和“原文线索”都属于解释同一个目标文档为什么相关的证据。不要再把它们拆成两个主列表；`sidebarAssociations` 应输出 `associatedDocuments`，`RightSidebar` 展示“关联文档”，卡片内用 `主题相似`、`局部相似`、`原文命中` 标签和 hover 证据预览承载具体命中，点击证据再定位块。
 
+2026-05-18: 排查“新文档在右侧 Wiki 没有关联”时，要同时检查内容块类型。`sidebarAssociations` 已补充 `codeBlock`、`alert`、`table`、`richTable` 和 `toggleListItem` 文本作为相似候选；目录树、路径、提醒块、表格和折叠列表现在可以触发推荐。后续继续扩展推荐召回时，要配套测试并控制路径、代码和表格元数据带来的噪声。
+
 ## Search Highlighting
 
 Workspace search highlighting 当前只标记 preview 里的 direct query-part matches。除非明确实现并测试过，不要假设 fuzzy-span highlighting 已存在。
@@ -103,6 +105,8 @@ Project requirements docs were migrated from hidden `.scratch/` to visible `docs
 
 Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_name>_spec.md` such as `local_share_spec.md`; do not create deep `<feature>/SPEC.md` folders unless a feature genuinely needs multiple supporting files.
 
+2026-05-19: When adding a new WorkKnowlage product capability, put the durable requirement source of truth in a feature SPEC under `docs/requirements/specs/` first. Update the PRD only as product-scope and SPEC-index synchronization. Use `docs/plans/` for execution plans, not as the primary place for product requirements.
+
 2026-05-15: When a product design discussion changes WorkKnowlage scope, information architecture, or user-facing interaction model, update the project PRD alongside `docs/plans/` design and implementation plans. Do not leave product-level changes only in planning docs. Keep PRD updates product-level and put detailed fields, states, and algorithms in the feature SPEC or implementation plan. If the PRD's SPEC management table names a feature SPEC path and enough detail exists, create or update that SPEC in the same pass and mark the PRD SPEC status accordingly.
 
 2026-05-15: WorkKnowlage feature SPECs should actively resolve implementation-facing product questions before planning. Do not leave obvious defaults as pending. For the right-sidebar Wiki association spec, decisions such as badge count vs dot, `9+` cap, default Properties tab, no current AI/embedding retrieval, and no manual evidence-to-relation promotion belong in the SPEC as current-version decisions.
@@ -112,6 +116,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 2026-05-18: For WorkKnowlage requirements, avoid maintaining separate long-lived design docs and feature SPECs for the same single feature. Put product background,方案取舍, flows, states, boundaries, and acceptance criteria into the flat feature SPEC under `docs/requirements/specs/`. Do not include detailed implementation task breakdowns in SPEC by default; keep implementation plans as execution-time artifacts only when actively coding complex work, handing off, or coordinating parallel work.
 
 2026-05-18: When consolidating WorkKnowlage design docs into a feature SPEC, preserve useful product/design content instead of compressing it into a short summary. Merge background, trade-off analysis, product shape, data flow, model boundaries, and non-goals when relevant. The goal is fewer source-of-truth files, not less product information; implementation commands and file-by-file task plans should stay out of long-lived requirements unless explicitly needed.
+
+2026-05-18: SQLite `datetime('now')` returns UTC strings without a timezone suffix. When showing document timestamps, treat `YYYY-MM-DD HH:mm:ss` as UTC storage and format it into the user's local timezone before displaying; otherwise WorkKnowlage appears eight hours behind on China Standard Time systems.
 
 ## How to Add Lessons
 

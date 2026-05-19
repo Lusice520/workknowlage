@@ -13,6 +13,7 @@ const {
   normalizeContentJson,
   serializeSectionsAsContentJson,
 } = require('../documentContent.cjs');
+const { formatLocalTimestampLabel } = require('./timestamps.cjs');
 
 function generateId() {
   return crypto.randomUUID();
@@ -49,7 +50,7 @@ function assembleDocument(row) {
     title: row.title,
     contentJson,
     updatedAt: row.updated_at || '',
-    updatedAtLabel: row.updated_at || '',
+    updatedAtLabel: formatLocalTimestampLabel(row.updated_at),
     wordCountLabel: `${row.word_count || 0} 字`,
     badgeLabel: row.badge_label || '',
     outline,

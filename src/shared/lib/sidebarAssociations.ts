@@ -200,7 +200,24 @@ const flattenInlineText = (value: unknown): string => {
     return record.text;
   }
 
-  return [flattenInlineText(record.content), flattenInlineText(record.children)].join('');
+  return [
+    flattenInlineText(record.content),
+    flattenInlineText(record.children),
+    flattenInlineText(record.rows),
+    flattenInlineText(record.cells),
+  ].join(' ');
+};
+
+const parseJsonMaybe = (value: unknown): unknown => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 };
 
 const getBlockPropsText = (value: unknown): string => {
@@ -214,6 +231,24 @@ const getBlockPropsText = (value: unknown): string => {
     typeof record.title === 'string' ? record.title : '',
     typeof record.caption === 'string' ? record.caption : '',
     typeof record.label === 'string' ? record.label : '',
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(' ');
+};
+
+const getRichTableText = (props: unknown): string => {
+  const record = asRecord(props);
+  const data = typeof record?.data === 'string' ? parseJsonMaybe(record.data) : record?.data;
+  return flattenInlineText(data).trim();
+};
+
+const getBlockCandidateText = (record: JsonRecord): string => {
+  const props = asRecord(record.props);
+  return [
+    flattenInlineText(record.content),
+    getBlockPropsText(props),
+    record.type === 'richTable' ? getRichTableText(props) : '',
   ]
     .map((item) => item.trim())
     .filter(Boolean)
@@ -346,7 +381,7 @@ const getBlockSimilarityCandidates = (
     }
 
     const blockId = typeof record.id === 'string' ? record.id : `${pathPrefix}-${index}`;
-    const text = [flattenInlineText(record.content), getBlockPropsText(record.props)].join(' ').trim();
+    const text = getBlockCandidateText(record);
     const childCandidates = Array.isArray(record.children)
       ? getBlockSimilarityCandidates(record.children, documentTitle, `${blockId}-child`, options)
       : [];
@@ -359,9 +394,14 @@ const getBlockSimilarityCandidates = (
       'heading',
       'paragraph',
       'quote',
+      'alert',
       'bulletListItem',
       'numberedListItem',
       'checkListItem',
+      'toggleListItem',
+      'codeBlock',
+      'table',
+      'richTable',
       'image',
       'video',
       'file',
