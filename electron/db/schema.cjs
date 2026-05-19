@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS documents (
   space_id        TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
   folder_id       TEXT,
   title           TEXT NOT NULL,
+  document_kind   TEXT NOT NULL DEFAULT 'note' CHECK(document_kind IN ('note','spreadsheet')),
   content_json    TEXT NOT NULL DEFAULT '[]',
   is_favorite     INTEGER NOT NULL DEFAULT 0,
   deleted_at      TEXT,
@@ -32,6 +33,13 @@ CREATE TABLE IF NOT EXISTS documents (
   badge_label     TEXT NOT NULL DEFAULT '',
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS document_spreadsheets (
+  document_id   TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  workbook_json TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS quick_notes (
@@ -123,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_folders_space ON folders(space_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
 CREATE INDEX IF NOT EXISTS idx_documents_space ON documents(space_id);
+CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(document_kind);
 CREATE INDEX IF NOT EXISTS idx_quick_notes_space_date ON quick_notes(space_id, note_date);
 CREATE INDEX IF NOT EXISTS idx_document_shares_token ON document_shares(token);
 CREATE INDEX IF NOT EXISTS idx_document_tags_doc ON document_tags(document_id);

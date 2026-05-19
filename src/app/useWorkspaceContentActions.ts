@@ -3,7 +3,7 @@ import { getQuickNoteTitle } from '../shared/lib/quickNotes';
 import { deriveOutlineFromContentJson } from '../shared/lib/documentContent';
 import { getWorkKnowlageApi } from '../shared/lib/workKnowlageApi';
 import type { UploadAssetInput } from '../shared/types/preload';
-import type { WorkspaceState } from '../shared/types/workspace';
+import type { DocumentCreateOptions, WorkspaceState } from '../shared/types/workspace';
 import type { WorkspaceSessionActionsOptions, WorkspaceSessionActionsState } from './workspaceSessionActionTypes';
 import { collectTreePackageIds } from '../shared/lib/workKnowlageTree';
 import { updateDocumentInState } from './workspaceSessionActionTypes';
@@ -62,15 +62,17 @@ export function useWorkspaceContentActions({
   setQuickNoteRefreshKey,
 }: WorkspaceSessionActionsOptions): WorkspaceContentActionsState {
   const createDocument = useCallback(
-    async (folderId: string | null) => {
+    async (folderId: string | null, options: DocumentCreateOptions = {}) => {
       if (!workspaceState) {
         return;
       }
 
+      const kind = options.kind === 'spreadsheet' ? 'spreadsheet' : 'note';
       const document = await getWorkKnowlageApi().documents.create({
         spaceId: workspaceState.activeSpaceId,
         folderId,
-        title: '无标题文档',
+        title: kind === 'spreadsheet' ? '无标题表格' : '无标题文档',
+        kind,
       });
 
       await reloadWorkspaceState({
@@ -79,7 +81,7 @@ export function useWorkspaceContentActions({
         ensureExpandedFolderIds: folderId ? [folderId] : [],
         activeCollectionView: 'tree',
       });
-      markPersistenceFeedback('新建文件');
+      markPersistenceFeedback(kind === 'spreadsheet' ? '新建 Excel' : '新建文件');
       setActiveQuickNoteDate(null);
       setEditingId(document.id);
     },

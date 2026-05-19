@@ -35,6 +35,9 @@ export default defineConfig({
   resolve: {
     alias: [...noCollabAliases],
   },
+  worker: {
+    format: 'es',
+  },
   build: {
     rollupOptions: {
       output: {

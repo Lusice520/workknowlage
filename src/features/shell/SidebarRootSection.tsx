@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react';
-import { FilePlus2, FolderPlus, Plus } from 'lucide-react';
+import { FilePlus2, FolderPlus, Plus, Table2 } from 'lucide-react';
 import type { DocumentRecord, FolderNode } from '../../shared/types/workspace';
 import { SidebarActionMenu } from './SidebarActionMenu';
 import { SidebarTree, type SidebarTreeProps } from './SidebarTree';
@@ -44,6 +44,13 @@ export function SidebarRootSection({
               icon: FilePlus2,
               onClick: () => {
                 void treeProps.onCreateDocument(null);
+              },
+            },
+            {
+              label: '新建 Excel',
+              icon: Table2,
+              onClick: () => {
+                void treeProps.onCreateDocument(null, { kind: 'spreadsheet' });
               },
             },
             {

@@ -1,4 +1,4 @@
-const { initDatabase, closeDatabase } = require('../electron/db/index.cjs');
+const { initDatabase, closeDatabase, getDatabase } = require('../electron/db/index.cjs');
 const spacesRepo = require('../electron/db/repositories/spaces.cjs');
 const foldersRepo = require('../electron/db/repositories/folders.cjs');
 const documentsRepo = require('../electron/db/repositories/documents.cjs');
@@ -45,6 +45,16 @@ async function runSmoke() {
     contentJson: updatedMovedRootDocument.contentJson,
   });
 
+  const spreadsheetDocument = documentsRepo.createDocument({
+    spaceId: space.id,
+    folderId: null,
+    title: 'Root Spreadsheet Document',
+    kind: 'spreadsheet',
+  });
+  const spreadsheetWorkbookRow = getDatabase()
+    .prepare('SELECT document_id AS documentId, workbook_json AS workbookJson FROM document_spreadsheets WHERE document_id = ?')
+    .get(spreadsheetDocument.id);
+
   closeDatabase();
   initDatabase();
   searchRepo.rebuildWorkspaceSearchIndex();
@@ -63,6 +73,10 @@ async function runSmoke() {
     createdRootFolderId: reopenedCreatedRootDocument?.folderId ?? null,
     movedRootFolderId: reopenedMovedRootDocument?.folderId ?? null,
     rootSearchHit,
+    rootDocumentKind: reopenedCreatedRootDocument?.kind ?? null,
+    spreadsheetDocumentKind: spreadsheetDocument?.kind ?? null,
+    spreadsheetWorkbookDocumentId: spreadsheetWorkbookRow?.documentId ?? null,
+    spreadsheetWorkbookJson: spreadsheetWorkbookRow?.workbookJson ?? null,
   })}`);
 }
 

@@ -191,10 +191,15 @@ function renderSidebarHarness({
               : [...prev.expandedFolderIds, folderId],
           }));
         }}
-        onCreateDocument={async (folderId) => {
-          await onCreateDocument(folderId);
+        onCreateDocument={async (folderId, options) => {
+          if (options) {
+            await onCreateDocument(folderId, options);
+          } else {
+            await onCreateDocument(folderId);
+          }
           setState((prev) => {
             const nextDocumentId = `created-doc-${prev.seed.documents.length + 1}`;
+            const kind = options?.kind === 'spreadsheet' ? 'spreadsheet' : 'note';
 
             return {
               ...prev,
@@ -207,7 +212,8 @@ function renderSidebarHarness({
                     id: nextDocumentId,
                     spaceId: prev.activeSpaceId,
                     folderId,
-                    title: '无标题文档',
+                    kind,
+                    title: kind === 'spreadsheet' ? '无标题表格' : '无标题文档',
                     contentJson: '[]',
                     updatedAtLabel: 'today',
                     wordCountLabel: '0 字',
@@ -755,6 +761,54 @@ test('supports creating child documents from a document row create menu', async 
   await waitFor(() => {
     expect(createDocument).toHaveBeenCalledWith('doc-alpha');
     expect(within(sidebar).getByText('无标题文档')).toBeInTheDocument();
+  });
+});
+
+test('supports creating spreadsheet documents from a document row create menu', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-alpha',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder' },
+      ],
+      documents: [
+        {
+          id: 'doc-alpha',
+          spaceId: 'space-alpha',
+          folderId: 'folder-alpha',
+          title: 'Alpha Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '10 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+      ],
+    },
+  };
+
+  const createDocument = vi.fn(async () => {});
+
+  await renderSidebarHarness({
+    initialState,
+    onCreateDocument: createDocument,
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+
+  await openSidebarMenu(sidebar, 'Alpha Doc 新建操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '新建 Excel' }));
+
+  await waitFor(() => {
+    expect(createDocument).toHaveBeenCalledWith('doc-alpha', { kind: 'spreadsheet' });
+    expect(within(sidebar).getByText('无标题表格')).toBeInTheDocument();
   });
 });
 

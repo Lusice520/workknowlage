@@ -5,6 +5,7 @@ const { initDatabase, closeDatabase, getDbPath, getUserDataDir } = require('./db
 const spacesRepo = require('./db/repositories/spaces.cjs');
 const foldersRepo = require('./db/repositories/folders.cjs');
 const documentsRepo = require('./db/repositories/documents.cjs');
+const spreadsheetsRepo = require('./db/repositories/spreadsheets.cjs');
 const quickNotesRepo = require('./db/repositories/quickNotes.cjs');
 const searchRepo = require('./db/repositories/search.cjs');
 const tagsRepo = require('./db/repositories/tags.cjs');
@@ -44,6 +45,7 @@ function upsertDocumentSearchEntry(document) {
     kind: 'document',
     spaceId: document.spaceId,
     documentId: document.id,
+    documentKind: document.kind,
     title: document.title,
     contentJson: document.contentJson,
   });
@@ -419,6 +421,14 @@ function registerIpcHandlers() {
     }
     return result;
   });
+
+  // ─── Spreadsheets ────────────────────────────────────
+  ipcMain.handle('spreadsheets:get', (_event, documentId) =>
+    spreadsheetsRepo.getSpreadsheetWorkbook(documentId)
+  );
+  ipcMain.handle('spreadsheets:update', (_event, documentId, workbookJson) =>
+    spreadsheetsRepo.updateSpreadsheetWorkbook(documentId, workbookJson)
+  );
 
   // ─── Quick notes ──────────────────────────────────────
   ipcMain.handle('quickNotes:get', (_event, noteDateOrSpaceId, maybeNoteDate) =>

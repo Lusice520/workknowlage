@@ -7,6 +7,7 @@ import { getWorkKnowlageApi, getWorkKnowlageRuntimeStatus } from '../shared/lib/
 import type {
   DataToolActionDetailItem,
   DataToolActionResult,
+  SpreadsheetWorkbookRecord,
   TrashItemRecord,
   WorkspaceSearchResultRecord,
 } from '../shared/types/preload';
@@ -110,6 +111,27 @@ export default function App() {
 
   const handleActiveDocumentContentSnapshotReady = useCallback((getContentJson: () => string) => {
     setActiveDocumentContentSnapshotGetter(() => getContentJson);
+  }, []);
+
+  const handleLoadSpreadsheetWorkbook = useCallback(async (documentId: string): Promise<SpreadsheetWorkbookRecord | null> => {
+    const spreadsheetApi = getWorkKnowlageApi().spreadsheets;
+    if (!spreadsheetApi) {
+      throw new Error('当前运行环境尚未提供表格存储接口');
+    }
+
+    return spreadsheetApi.get(documentId);
+  }, []);
+
+  const handleSaveSpreadsheetWorkbook = useCallback(async (
+    documentId: string,
+    workbookJson: string,
+  ): Promise<SpreadsheetWorkbookRecord> => {
+    const spreadsheetApi = getWorkKnowlageApi().spreadsheets;
+    if (!spreadsheetApi) {
+      throw new Error('当前运行环境尚未提供表格存储接口');
+    }
+
+    return spreadsheetApi.update(documentId, workbookJson);
   }, []);
 
   useEffect(() => {
@@ -412,6 +434,8 @@ export default function App() {
     onSwitchSpace: handleSwitchSpace,
     onOpenTrash: handleOpenTrash,
     onSaveDocumentContent: session.saveDocumentContent,
+    onLoadSpreadsheetWorkbook: handleLoadSpreadsheetWorkbook,
+    onSaveSpreadsheetWorkbook: handleSaveSpreadsheetWorkbook,
     onSaveQuickNoteContent: handleSaveQuickNoteContent,
     onCaptureQuickNote: handleCaptureQuickNote,
     onUploadFiles: session.uploadFiles,

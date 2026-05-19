@@ -1,0 +1,37 @@
+.wk-spreadsheet-host {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.wk-spreadsheet-container {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.wk-spreadsheet-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(248, 250, 252, 0.86);
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.wk-spreadsheet-state-error {
+  padding: 24px;
+  color: #be123c;
+  text-align: center;
+}

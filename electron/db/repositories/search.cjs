@@ -234,19 +234,27 @@ function makePreview(text, fallbackText = '') {
   return source.length > 120 ? `${source.slice(0, 120)}…` : source;
 }
 
+function normalizeDocumentKind(kind) {
+  return kind === 'spreadsheet' ? 'spreadsheet' : 'note';
+}
+
 function buildSearchEntry(input) {
   const entityId = input.id;
   const kind = input.kind;
   const spaceId = input.spaceId ?? input.space_id ?? '__global-quick-notes__';
   const documentId = input.documentId ?? input.document_id ?? null;
   const noteDate = input.noteDate ?? input.note_date ?? null;
+  const documentKind = normalizeDocumentKind(input.documentKind ?? input.document_kind);
   const title = normalizeWhitespace(input.title || '');
-  const bodyText = extractPlainTextFromContentJson(input.contentJson ?? input.content_json ?? '[]');
+  const bodyText = kind === 'document' && documentKind === 'spreadsheet'
+    ? ''
+    : extractPlainTextFromContentJson(input.contentJson ?? input.content_json ?? '[]');
 
   return {
     entityId,
     spaceId,
     kind,
+    documentKind,
     documentId,
     noteDate,
     title,
@@ -328,7 +336,9 @@ function upsertSearchEntry(input, db = getDatabase()) {
     entry.titleSearch,
     entry.bodySearch
   );
-  if (entry.kind === 'document') {
+  if (entry.kind === 'document' && entry.documentKind === 'spreadsheet') {
+    removeDocumentBlockSearchEntries(entry.documentId, db);
+  } else if (entry.kind === 'document') {
     upsertDocumentBlockSearchEntries(input, db);
   }
   return entry;
@@ -438,7 +448,7 @@ function rebuildWorkspaceSearchIndex() {
   const db = getDatabase();
   const documents = db
     .prepare(
-      `SELECT id, space_id AS spaceId, title, content_json AS contentJson
+      `SELECT id, space_id AS spaceId, title, document_kind AS documentKind, content_json AS contentJson
        FROM documents
        WHERE deleted_at IS NULL
        ORDER BY created_at`

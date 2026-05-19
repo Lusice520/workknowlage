@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type {
   DocumentFocusTarget,
+  DocumentCreateOptions,
   DocumentNavigationTarget,
   DocumentRecord,
   FolderNode,
@@ -9,7 +10,7 @@ import type {
   WorkspaceCollectionView,
   WorkspaceState,
 } from '../../shared/types/workspace';
-import type { TrashItemRecord } from '../../shared/types/preload';
+import type { SpreadsheetWorkbookRecord, TrashItemRecord } from '../../shared/types/preload';
 import type { EditorHostFocusDiagnostic } from '../../features/editor-host/EditorHost';
 
 export interface WorkspaceSessionContextValue {
@@ -28,7 +29,7 @@ export interface WorkspaceSessionContextValue {
   onSelectCollectionView: (view: Exclude<WorkspaceCollectionView, 'tree'>) => void;
   onSelectQuickNoteDate: (dateKey: string) => void;
   onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
+  onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onMoveFolderToSpace: (folderId: string, targetSpaceId: string) => Promise<void>;
@@ -46,6 +47,8 @@ export interface WorkspaceSessionContextValue {
   onSwitchSpace: (spaceId: string) => Promise<void>;
   onOpenTrash: () => Promise<void> | void;
   onSaveDocumentContent: (documentId: string, contentJson: string) => Promise<unknown>;
+  onLoadSpreadsheetWorkbook: (documentId: string) => Promise<SpreadsheetWorkbookRecord | null>;
+  onSaveSpreadsheetWorkbook: (documentId: string, workbookJson: string) => Promise<SpreadsheetWorkbookRecord>;
   onSaveQuickNoteContent: (noteDate: string, contentJson: string) => Promise<QuickNoteRecord>;
   onCaptureQuickNote: (noteDate: string) => Promise<unknown>;
   onUploadFiles: (documentId: string, files: File[]) => Promise<string[]>;

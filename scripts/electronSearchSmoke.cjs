@@ -4,6 +4,7 @@ const foldersRepo = require('../electron/db/repositories/folders.cjs');
 const documentsRepo = require('../electron/db/repositories/documents.cjs');
 const quickNotesRepo = require('../electron/db/repositories/quickNotes.cjs');
 const searchRepo = require('../electron/db/repositories/search.cjs');
+const spreadsheetsRepo = require('../electron/db/repositories/spreadsheets.cjs');
 
 const smokeContentJson = JSON.stringify([
   {
@@ -60,8 +61,48 @@ async function runSmoke() {
     kind: 'document',
     spaceId: updatedDocument.spaceId,
     documentId: updatedDocument.id,
+    documentKind: updatedDocument.kind,
     title: updatedDocument.title,
     contentJson: updatedDocument.contentJson,
+  });
+
+  const spreadsheetDocument = documentsRepo.createDocument({
+    spaceId: space.id,
+    folderId: folder.id,
+    title: 'Smoke Budget 预算表',
+    kind: 'spreadsheet',
+  });
+  spreadsheetsRepo.updateSpreadsheetWorkbook(spreadsheetDocument.id, JSON.stringify({
+    id: 'smoke-budget-workbook',
+    name: 'Smoke Budget 预算表',
+    appVersion: '0.23.0',
+    locale: 'zhCN',
+    styles: {},
+    sheetOrder: ['sheet-1'],
+    sheets: {
+      'sheet-1': {
+        id: 'sheet-1',
+        name: 'Sheet1',
+        rowCount: 100,
+        columnCount: 26,
+        cellData: {
+          0: {
+            0: {
+              v: 'Hidden Cell Token',
+            },
+          },
+        },
+      },
+    },
+  }));
+  searchRepo.upsertSearchEntry({
+    id: spreadsheetDocument.id,
+    kind: 'document',
+    spaceId: spreadsheetDocument.spaceId,
+    documentId: spreadsheetDocument.id,
+    documentKind: spreadsheetDocument.kind,
+    title: spreadsheetDocument.title,
+    contentJson: spreadsheetDocument.contentJson,
   });
 
   const savedQuickNote = quickNotesRepo.upsertQuickNote({
@@ -91,6 +132,14 @@ async function runSmoke() {
     spaceId: space.id,
     query: '快速记录',
   });
+  const spreadsheetTitleHits = searchRepo.searchWorkspace({
+    spaceId: space.id,
+    query: '预算表',
+  });
+  const spreadsheetCellHits = searchRepo.searchWorkspace({
+    spaceId: space.id,
+    query: 'Hidden Cell Token',
+  });
 
   closeDatabase();
   initDatabase();
@@ -99,6 +148,14 @@ async function runSmoke() {
   const persistedHits = searchRepo.searchWorkspace({
     spaceId: space.id,
     query: '检索',
+  });
+  const persistedSpreadsheetTitleHits = searchRepo.searchWorkspace({
+    spaceId: space.id,
+    query: '预算表',
+  });
+  const persistedSpreadsheetCellHits = searchRepo.searchWorkspace({
+    spaceId: space.id,
+    query: 'Hidden Cell Token',
   });
 
   const smokeResult = {
@@ -109,7 +166,11 @@ async function runSmoke() {
     firstPassHits,
     blockHits,
     noteHits,
+    spreadsheetTitleHits,
+    spreadsheetCellHits,
     persistedHits,
+    persistedSpreadsheetTitleHits,
+    persistedSpreadsheetCellHits,
   };
 
   closeDatabase();

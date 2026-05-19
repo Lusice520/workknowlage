@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react';
-import { FileText, FolderTree, Search, Star } from 'lucide-react';
+import { FileText, FolderTree, Search, Star, Table2 } from 'lucide-react';
 import { getDocumentsForCollectionView } from '../../shared/lib/workspaceSelectors';
 import type {
   DocumentRecord,
@@ -156,6 +156,7 @@ export function CollectionCenterPane({
           <div className="space-y-3 pb-2">
             {visibleDocuments.map((document) => {
               const isFavorite = Boolean(document.isFavorite);
+              const isSpreadsheet = document.kind === 'spreadsheet';
               const locationLabel = getDocumentLocationLabel(folders, document.folderId);
               const favoriteLabel = `${isFavorite ? '取消收藏' : '收藏'}文档 ${document.title}`;
 
@@ -176,12 +177,18 @@ export function CollectionCenterPane({
                         {document.title}
                       </button>
                       <div className="mt-3 flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--wk-muted)]">
+                        {isSpreadsheet ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                            <Table2 size={12} />
+                            表格
+                          </span>
+                        ) : null}
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1">
                           <FolderTree size={12} />
                           {locationLabel}
                         </span>
                         <span>{document.updatedAtLabel}</span>
-                        <span>{document.wordCountLabel}</span>
+                        {!isSpreadsheet ? <span>{document.wordCountLabel}</span> : null}
                         {document.badgeLabel ? (
                           <span className="rounded-full bg-[rgba(59,130,246,0.08)] px-2.5 py-1 text-[11px] font-medium text-[var(--wk-accent)]">
                             #{document.badgeLabel}

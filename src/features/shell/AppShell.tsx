@@ -68,6 +68,10 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
     () => getActiveWikiRecommendationFeedback(wikiRecommendationFeedback, ws.activeDocument?.id),
     [wikiRecommendationFeedback, ws.activeDocument?.id],
   );
+  const isSpreadsheetDocument = ws.activeDocument?.kind === 'spreadsheet' && !ws.activeQuickNote;
+  const shellGridClassName = isSpreadsheetDocument
+    ? 'grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)] gap-2'
+    : 'grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] gap-2';
 
   const markWikiRecommendationUseful = useCallback((targetDocumentId: string) => {
     const sourceDocumentId = ws.activeDocument?.id;
@@ -144,7 +148,7 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
       <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[40%] w-[30%] rounded-full bg-blue-300/20 blur-[120px]"></div>
       <div className="pointer-events-none absolute -bottom-[10%] -right-[5%] h-[40%] w-[30%] rounded-full bg-indigo-300/20 blur-[120px]"></div>
       <div className="relative z-10 h-full">
-        <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)_320px] gap-2">
+        <div className={shellGridClassName}>
           <LeftSidebar
             activeSpace={ws.activeSpace}
             state={ws.state}
@@ -206,6 +210,8 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
             onShareDocument={share.onShareDocument}
             onRegenerateShareDocument={share.onRegenerateShareDocument}
             onDisableShareDocument={share.onDisableShareDocument}
+            onLoadSpreadsheetWorkbook={ws.onLoadSpreadsheetWorkbook}
+            onSaveSpreadsheetWorkbook={ws.onSaveSpreadsheetWorkbook}
             onExportMarkdown={exp.onExportMarkdown}
             onExportPdf={exp.onExportPdf}
             onExportWord={exp.onExportWord}
@@ -220,21 +226,23 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
             onFocusDiagnostic={ws.onDocumentFocusDiagnostic}
             onFocusTargetConsumed={ws.onDocumentFocusTargetConsumed}
           />
-          <RightSidebar
-            activeDocument={ws.activeDocument}
-            activeQuickNote={ws.activeQuickNote}
-            activeFolder={ws.activeFolder}
-            activeSpace={ws.activeSpace}
-            associationState={associationState}
-            focusedOutlineItemId={focusedOutlineItemId}
-            recommendationFeedback={activeWikiRecommendationFeedback}
-            onAddTagToDocument={ws.onAddTagToDocument}
-            onFocusOutlineItem={setFocusedOutlineItemId}
-            onMarkRecommendationUseful={markWikiRecommendationUseful}
-            onRemoveTagFromDocument={ws.onRemoveTagFromDocument}
-            onOpenBacklinkDocument={ws.onOpenBacklinkDocument}
-            onShowLessLikeThis={showLessWikiRecommendationsLikeThis}
-          />
+          {!isSpreadsheetDocument ? (
+            <RightSidebar
+              activeDocument={ws.activeDocument}
+              activeQuickNote={ws.activeQuickNote}
+              activeFolder={ws.activeFolder}
+              activeSpace={ws.activeSpace}
+              associationState={associationState}
+              focusedOutlineItemId={focusedOutlineItemId}
+              recommendationFeedback={activeWikiRecommendationFeedback}
+              onAddTagToDocument={ws.onAddTagToDocument}
+              onFocusOutlineItem={setFocusedOutlineItemId}
+              onMarkRecommendationUseful={markWikiRecommendationUseful}
+              onRemoveTagFromDocument={ws.onRemoveTagFromDocument}
+              onOpenBacklinkDocument={ws.onOpenBacklinkDocument}
+              onShowLessLikeThis={showLessWikiRecommendationsLikeThis}
+            />
+          ) : null}
         </div>
       </div>
       <SettingsModal

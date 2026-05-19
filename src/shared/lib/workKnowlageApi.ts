@@ -20,6 +20,7 @@ export const createFallbackDesktopApi = (): WorkKnowlageDesktopApi =>
   createMutableFallbackDesktopApi({
     seed: cloneWorkspaceSeed(),
     shares: {},
+    spreadsheets: {},
     uploadedAssets: {},
     quickNotes: [],
   });
@@ -27,6 +28,7 @@ export const createFallbackDesktopApi = (): WorkKnowlageDesktopApi =>
 const fallbackDesktopApi = createMutableFallbackDesktopApi({
   seed: cloneWorkspaceSeed(),
   shares: {},
+  spreadsheets: {},
   uploadedAssets: {},
   quickNotes: [],
 });

@@ -3,7 +3,7 @@ import { MantineProvider } from '@mantine/core';
 import { ChevronsUpDown, FileText, Star } from 'lucide-react';
 import { getRootDocuments, getRootFolders } from '../../shared/lib/workspaceSelectors';
 import type { WorkspaceSearchResultRecord } from '../../shared/types/preload';
-import type { Space, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, Space, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
 import { SidebarQuickNotePanel } from './SidebarQuickNotePanel';
 import { SidebarRootSection } from './SidebarRootSection';
 import { SpaceSwitcher } from './SpaceSwitcher';
@@ -41,7 +41,7 @@ interface LeftSidebarProps {
   onSelectSearchResult: (result: WorkspaceSearchResultRecord) => void;
   onSelectQuickNoteDate: (dateKey: string) => void;
   onToggleFolder: (folderId: string) => void;
-  onCreateDocument: (folderId: string | null) => Promise<void>;
+  onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;

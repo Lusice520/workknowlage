@@ -3,6 +3,7 @@ import type {
   DataToolActionResult,
   DocumentShareRecord,
   ExportActionResult,
+  SpreadsheetWorkbookRecord,
   UploadAssetInput,
   UploadedAssetRecord,
   WorkKnowlageDesktopApi,
@@ -52,6 +53,7 @@ const FALLBACK_EXPORT_ROOT = '浏览器会话导出';
 export interface MutableFallbackState {
   seed: WorkspaceSeed;
   shares: Record<string, DocumentShareRecord>;
+  spreadsheets?: Record<string, SpreadsheetWorkbookRecord>;
   uploadedAssets: Record<string, UploadedAssetRecord[]>;
   quickNotes: QuickNoteRecord[];
 }
@@ -82,9 +84,30 @@ const createFallbackExportResult = (fileName: string): ExportActionResult => ({
   path: `${FALLBACK_EXPORT_ROOT}/${fileName}`,
 });
 
+const createDefaultSpreadsheetWorkbookJson = (title = '无标题表格') => JSON.stringify({
+  id: `fallback-workbook-${Date.now()}`,
+  name: title,
+  appVersion: '0.23.0',
+  locale: 'zhCN',
+  styles: {},
+  sheetOrder: ['sheet-1'],
+  sheets: {
+    'sheet-1': {
+      id: 'sheet-1',
+      name: 'Sheet1',
+      rowCount: 100,
+      columnCount: 26,
+      defaultColumnWidth: 88,
+      defaultRowHeight: 24,
+      cellData: {},
+    },
+  },
+});
+
 export const createMutableFallbackDesktopApi = ({
   seed,
   shares,
+  spreadsheets = {},
   uploadedAssets,
   quickNotes,
 }: MutableFallbackState): WorkKnowlageDesktopApi => {
@@ -440,9 +463,11 @@ export const createMutableFallbackDesktopApi = ({
       getById: async (documentId) => getDocumentById(documentId),
       create: async (data) => {
         const now = new Date().toISOString();
+        const kind = data.kind === 'spreadsheet' ? 'spreadsheet' : 'note';
         const nextDocument = hydrateDocumentRecord({
           id: `doc-${Date.now()}`,
           ...data,
+          kind,
           title: data.title,
           updatedAt: now,
           updatedAtLabel: new Date(now).toLocaleDateString('zh-CN'),
@@ -454,6 +479,13 @@ export const createMutableFallbackDesktopApi = ({
         });
 
         seed.documents.push(nextDocument);
+        if (kind === 'spreadsheet') {
+          spreadsheets[nextDocument.id] = {
+            documentId: nextDocument.id,
+            workbookJson: createDefaultSpreadsheetWorkbookJson(data.title),
+            updatedAt: now,
+          };
+        }
         rebuildBacklinksForSpace(data.spaceId);
         return getDocumentById(nextDocument.id) ?? nextDocument;
       },
@@ -548,6 +580,24 @@ export const createMutableFallbackDesktopApi = ({
         }
       },
     },
+    spreadsheets: {
+      get: async (documentId) => spreadsheets[documentId] ?? null,
+      update: async (documentId, workbookJson) => {
+        JSON.parse(workbookJson);
+        const current = spreadsheets[documentId];
+        if (!current) {
+          throw new Error(`Fallback spreadsheet not found: ${documentId}`);
+        }
+
+        const nextWorkbook = {
+          documentId,
+          workbookJson,
+          updatedAt: new Date().toISOString(),
+        };
+        spreadsheets[documentId] = nextWorkbook;
+        return nextWorkbook;
+      },
+    },
     quickNotes: {
       get: async (noteDateOrSpaceId, maybeNoteDate?: string) =>
         findQuickNoteByDate(resolveQuickNoteDate(noteDateOrSpaceId, maybeNoteDate)),
@@ -619,20 +669,22 @@ export const createMutableFallbackDesktopApi = ({
 
         const documentCandidates: FallbackSearchCandidate[] = getActiveDocuments(seed.documents, spaceId)
           .map((document) => {
-            const bodyText = [
-              document.sections
-                .flatMap((section) => [
-                  section.title ?? '',
-                  section.content ?? '',
-                  section.caption ?? '',
-                  ...(section.items ?? []),
-                ])
-                .join(' '),
-              extractSearchableText(document.contentJson),
-            ]
-              .join(' ')
-              .replace(/\s+/g, ' ')
-              .trim();
+            const bodyText = document.kind === 'spreadsheet'
+              ? ''
+              : [
+                document.sections
+                  .flatMap((section) => [
+                    section.title ?? '',
+                    section.content ?? '',
+                    section.caption ?? '',
+                    ...(section.items ?? []),
+                  ])
+                  .join(' '),
+                extractSearchableText(document.contentJson),
+              ]
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
 
             return {
               id: document.id,
@@ -651,6 +703,7 @@ export const createMutableFallbackDesktopApi = ({
           .map(({ searchableText: _searchableText, ...record }) => record);
 
         const blockHits: Array<WorkspaceSearchResultRecord & { score: number }> = getActiveDocuments(seed.documents, spaceId)
+          .filter((document) => document.kind !== 'spreadsheet')
           .flatMap((document) =>
             extractSearchableBlocks(document.contentJson).map((block) => ({
               id: `block:${document.id}:${block.blockId}`,

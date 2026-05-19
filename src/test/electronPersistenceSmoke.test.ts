@@ -112,6 +112,11 @@ test('creates a backup, restores overwritten data, and cleans orphan attachments
     attachmentRestored: true,
     quickNoteAttachmentRestored: true,
   });
+  expect(smokeResult.spreadsheet).toEqual({
+    documentKind: 'spreadsheet',
+    title: 'Smoke Budget Sheet',
+    workbookCellValue: 'Q1 Budget',
+  });
   expect(smokeResult.cleanup).toMatchObject({
     deletedFiles: 1,
     deletedDirectories: 1,

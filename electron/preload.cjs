@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     delete:   (id)          => ipcRenderer.invoke('documents:delete', id),
   },
 
+  spreadsheets: {
+    get:    (documentId) => ipcRenderer.invoke('spreadsheets:get', documentId),
+    update: (documentId, workbookJson) => ipcRenderer.invoke('spreadsheets:update', documentId, workbookJson),
+  },
+
   quickNotes: {
     get:      (...args) => ipcRenderer.invoke('quickNotes:get', ...args),
     upsert:   (data)              => ipcRenderer.invoke('quickNotes:upsert', data),

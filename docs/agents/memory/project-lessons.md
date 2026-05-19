@@ -103,6 +103,8 @@ Project requirements docs were migrated from hidden `.scratch/` to visible `docs
 
 Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_name>_spec.md` such as `local_share_spec.md`; do not create deep `<feature>/SPEC.md` folders unless a feature genuinely needs multiple supporting files.
 
+2026-05-19: When adding a new WorkKnowlage product capability, put the durable requirement source of truth in a feature SPEC under `docs/requirements/specs/` first. Update the PRD only as product-scope and SPEC-index synchronization. Use `docs/plans/` for execution plans, not as the primary place for product requirements.
+
 2026-05-15: When a product design discussion changes WorkKnowlage scope, information architecture, or user-facing interaction model, update the project PRD alongside `docs/plans/` design and implementation plans. Do not leave product-level changes only in planning docs. Keep PRD updates product-level and put detailed fields, states, and algorithms in the feature SPEC or implementation plan. If the PRD's SPEC management table names a feature SPEC path and enough detail exists, create or update that SPEC in the same pass and mark the PRD SPEC status accordingly.
 
 2026-05-15: WorkKnowlage feature SPECs should actively resolve implementation-facing product questions before planning. Do not leave obvious defaults as pending. For the right-sidebar Wiki association spec, decisions such as badge count vs dot, `9+` cap, default Properties tab, no current AI/embedding retrieval, and no manual evidence-to-relation promotion belong in the SPEC as current-version decisions.
@@ -112,6 +114,8 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 2026-05-18: For WorkKnowlage requirements, avoid maintaining separate long-lived design docs and feature SPECs for the same single feature. Put product background,方案取舍, flows, states, boundaries, and acceptance criteria into the flat feature SPEC under `docs/requirements/specs/`. Do not include detailed implementation task breakdowns in SPEC by default; keep implementation plans as execution-time artifacts only when actively coding complex work, handing off, or coordinating parallel work.
 
 2026-05-18: When consolidating WorkKnowlage design docs into a feature SPEC, preserve useful product/design content instead of compressing it into a short summary. Merge background, trade-off analysis, product shape, data flow, model boundaries, and non-goals when relevant. The goal is fewer source-of-truth files, not less product information; implementation commands and file-by-file task plans should stay out of long-lived requirements unless explicitly needed.
+
+2026-05-19: WorkKnowlage 表格文档不是普通文稿的另一种内容块。表格态应优先给在线 Spreadsheet 画布让出空间，避免复用右侧“文稿概览 / Wiki / 文稿脉络”信息栏。集成 Univer 时必须显式注册当前语言包，并为表格 preset 提供可打包的 module worker；否则会出现空白容器或运行时 `[LocaleService]: Locale not initialized`。
 
 ## How to Add Lessons
 

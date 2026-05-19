@@ -81,3 +81,37 @@ test('renders favorite documents sorted by recent update, supports search, and k
 
   expect(onSetDocumentFavorite).toHaveBeenCalledWith('doc-newer', false);
 });
+
+test('renders spreadsheet documents as collection items without note word-count metadata', () => {
+  render(
+    <CollectionCenterPane
+      view="all-notes"
+      activeSpaceName="个人工作空间"
+      documents={[
+        {
+          id: 'sheet-budget',
+          spaceId: 'space-1',
+          folderId: null,
+          title: '季度预算表',
+          kind: 'spreadsheet',
+          contentJson: '[]',
+          updatedAt: '2026-05-19T08:00:00.000Z',
+          updatedAtLabel: '2026年5月19日',
+          wordCountLabel: '0 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+        },
+      ]}
+      folders={[]}
+      onOpenDocument={vi.fn()}
+      onSetDocumentFavorite={vi.fn().mockResolvedValue(undefined)}
+    />
+  );
+
+  expect(screen.getByRole('button', { name: '打开文档 季度预算表' })).toBeInTheDocument();
+  expect(screen.getByText('表格')).toBeInTheDocument();
+  expect(screen.queryByText('0 字')).not.toBeInTheDocument();
+});

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type {
   DocumentRecord,
+  DocumentCreateOptions,
   QuickNoteRecord,
   WorkspaceCollectionView,
   WorkspaceState,
@@ -23,7 +24,7 @@ export interface WorkspaceSessionActionsState {
   selectCollectionView: (view: Exclude<WorkspaceCollectionView, 'tree'>) => void;
   selectQuickNoteDate: (noteDate: string) => void;
   toggleFolder: (folderId: string) => void;
-  createDocument: (folderId: string | null) => Promise<void>;
+  createDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   createFolder: (parentId: string | null) => Promise<void>;
   moveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   moveFolderToSpace: (folderId: string, targetSpaceId: string) => Promise<void>;
