@@ -16,13 +16,21 @@ const smokeScriptPath = path.resolve(
   process.cwd(),
   'scripts/electronPersistenceSmoke.cjs'
 );
+const legacyMigrationSmokeScriptPath = path.resolve(
+  process.cwd(),
+  'scripts/electronLegacyMigrationSmoke.cjs'
+);
 const loadDbModule = (): {
   closeDatabase: () => void;
   getDbPath: () => string;
 } => require(dbModulePath);
 
-const runElectronSmokeScript = (userDataDir: string) => {
-  const result = spawnSync(electronBinary, [smokeScriptPath], {
+const runElectronSmokeScript = (
+  userDataDir: string,
+  scriptPath = smokeScriptPath,
+  outputPrefix = '',
+) => {
+  const result = spawnSync(electronBinary, [scriptPath], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -46,7 +54,8 @@ const runElectronSmokeScript = (userDataDir: string) => {
     ].filter(Boolean).join('\n'));
   }
 
-  return JSON.parse(String(result.stdout || '').trim().split('\n').filter(Boolean).at(-1) ?? '{}');
+  const outputLine = String(result.stdout || '').trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+  return JSON.parse(outputPrefix ? outputLine.replace(outputPrefix, '') : outputLine);
 };
 
 const createTempUserDataDir = async () => {
@@ -76,6 +85,22 @@ test('resolves the SQLite database path inside an overridden user data directory
   const { getDbPath } = loadDbModule();
 
   expect(getDbPath()).toBe(path.join(userDataDir, 'workknowlage.db'));
+});
+
+test('migrates legacy document columns before applying schema indexes', async () => {
+  const userDataDir = await createTempUserDataDir();
+  const smokeResult = runElectronSmokeScript(
+    userDataDir,
+    legacyMigrationSmokeScriptPath,
+    '__LEGACY_MIGRATION_SMOKE__',
+  );
+
+  expect(smokeResult).toEqual({
+    ok: true,
+    documentKindColumn: true,
+    documentKind: 'note',
+    documentKindIndex: 'idx_documents_kind',
+  });
 });
 
 test('persists created spaces, folders, documents, and quick notes across database reopen in Electron', async () => {

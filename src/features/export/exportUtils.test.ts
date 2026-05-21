@@ -1,5 +1,20 @@
-import { describe, expect, test } from 'vitest';
-import { sanitizeFileName, toMarkdownFromBlocks, toPrintHtmlDocumentFromBlocks, toPrintHtmlFromBlocks } from './exportUtils';
+import { describe, expect, test, vi } from 'vitest';
+import {
+  sanitizeFileName,
+  toMarkdownFromBlocks,
+  toPrintHtmlDocumentFromBlocks,
+  toPrintHtmlDocumentFromBlocksWithMermaid,
+  toPrintHtmlFromBlocks,
+} from './exportUtils';
+
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async (id: string, source: string) => ({
+      svg: `<svg data-kind="mermaid" data-id="${id}"><text>${source}</text></svg>`,
+    })),
+  },
+}));
 
 describe('exportUtils', () => {
   test('sanitizes export file names', () => {
@@ -73,6 +88,23 @@ describe('exportUtils', () => {
     ]);
 
     expect(markdown).toBe('```mermaid\ngraph TD\nA[PRD] --> B[SPEC]\n```');
+  });
+
+  test('pre-renders Mermaid code blocks as SVG for printable PDF HTML', async () => {
+    const html = await toPrintHtmlDocumentFromBlocksWithMermaid([
+      {
+        id: 'mermaid-1',
+        type: 'codeBlock',
+        props: { language: 'mermaid' },
+        content: [{ type: 'text', text: 'graph TD\nA[PRD] --> B[SPEC]', styles: {} }],
+        children: [],
+      },
+    ], '流程图');
+
+    expect(html).toContain('class="kb-export-mermaid"');
+    expect(html).toContain('<svg data-kind="mermaid"');
+    expect(html).toContain('graph TD');
+    expect(html).not.toContain('<pre><code>graph TD');
   });
 
   test('renders printable html for alerts and images', () => {

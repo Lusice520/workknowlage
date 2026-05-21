@@ -5,6 +5,7 @@ export interface ExportContextValue {
   exportStatusText: string | null | undefined;
   onExportMarkdown: () => Promise<void> | void;
   onExportPdf: () => Promise<void> | void;
+  onExportSpreadsheet: () => Promise<void> | void;
   onExportWord: () => Promise<void> | void;
 }
 

@@ -7,6 +7,42 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { buildShareHtml } = require('./render.cjs');
 
+test('renders spreadsheet documents as read-only shared tables', () => {
+  const html = buildShareHtml({
+    origin: 'http://127.0.0.1:8787',
+    share: { enabled: true },
+    document: {
+      title: '预算表',
+      kind: 'spreadsheet',
+      updatedAtLabel: '刚刚',
+    },
+    spreadsheetWorkbookJson: JSON.stringify({
+      sheetOrder: ['sheet-1'],
+      sheets: {
+        'sheet-1': {
+          name: 'Sheet1',
+          cellData: {
+            0: {
+              0: { v: '项目' },
+              1: { v: '金额' },
+            },
+            1: {
+              0: { v: '设计' },
+              1: { v: 1200 },
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  expect(html).toContain('预算表 - WorkKnowlage');
+  expect(html).toContain('<span class="pill">#表格</span>');
+  expect(html).toContain('share-spreadsheet-table');
+  expect(html).toContain('<td>项目</td>');
+  expect(html).toContain('<td>1200</td>');
+});
+
 test('renders native BlockNote tables in shared html', () => {
   const html = buildShareHtml({
     origin: 'http://127.0.0.1:8787',

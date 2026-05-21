@@ -20,15 +20,32 @@ const {
   restoreBackupSnapshot,
 } = require('./maintenance/dataTools.cjs');
 const {
+  createPublicShare,
   createShare,
+  disablePublicShare,
   disableShare,
+  disableSharesForSpace,
   getShareByDocumentId,
+  listSharesForSpace,
   regenerateShare,
 } = require('./share/repository.cjs');
 const { startShareServer } = require('./share/server.cjs');
+const { getPublicShareExpiryDelay, startCloudflareTunnel } = require('./share/cloudflareTunnel.cjs');
+const {
+  findExternalMarkdownFilePaths,
+  importExternalMarkdownFile,
+  isExternalMarkdownFilePath,
+  readExternalMarkdownFile,
+  saveExternalMarkdownFile,
+} = require('./externalFiles.cjs');
 
 let shareServerRuntime = null;
+const publicShareTunnelRuntimes = new Map();
 let uploadStorage = null;
+let externalFileHandlingReady = false;
+const pendingExternalMarkdownFilePaths = [];
+const externalFileWindowsByPath = new Map();
+const externalFilePathsByWebContentsId = new Map();
 
 function reopenDatabase() {
   closeDatabase();
@@ -171,15 +188,133 @@ function deleteTrashItem(spaceId, trashRootId) {
   return false;
 }
 
-function attachPublicUrl(share) {
+function getLocalShareUrl(share) {
+  if (!share || !shareServerRuntime) {
+    return '';
+  }
+
+  return shareServerRuntime.getPublicUrl(share.token);
+}
+
+function getTunnelPublicShareUrl(share) {
+  const runtime = share?.documentId ? publicShareTunnelRuntimes.get(share.documentId) : null;
+  if (!runtime?.publicUrl || !share?.publicToken) {
+    return '';
+  }
+
+  return `${runtime.publicUrl}/public/share/${share.publicToken}`;
+}
+
+async function handleUnexpectedPublicShareTunnelExit(documentId, detail = {}) {
+  const runtime = publicShareTunnelRuntimes.get(documentId);
+  if (runtime?.expiresTimer) {
+    clearTimeout(runtime.expiresTimer);
+  }
+  publicShareTunnelRuntimes.delete(documentId);
+  try {
+    disablePublicShare(documentId);
+  } catch (error) {
+    console.error('[Share] Failed to disable public share after tunnel exit:', error, detail);
+  }
+}
+
+function attachLocalShareUrl(share) {
+  if (!share || !shareServerRuntime) {
+    return share;
+  }
+
+  const localUrl = getLocalShareUrl(share);
+  return {
+    ...share,
+    localUrl,
+    publicUrl: localUrl,
+  };
+}
+
+function attachShareUrls(share) {
+  if (!share || !shareServerRuntime) {
+    return share;
+  }
+
+  const localUrl = getLocalShareUrl(share);
+  const publicUrl = getTunnelPublicShareUrl(share) || localUrl;
+  return {
+    ...share,
+    localUrl,
+    publicUrl,
+  };
+}
+
+function attachWorkspaceShareUrls(share) {
   if (!share || !shareServerRuntime) {
     return share;
   }
 
   return {
     ...share,
-    publicUrl: shareServerRuntime.getPublicUrl(share.token),
+    localUrl: share.enabled ? getLocalShareUrl(share) : '',
+    publicUrl: share.publicEnabled ? getTunnelPublicShareUrl(share) : '',
   };
+}
+
+async function closePublicShareTunnel(documentId) {
+  const runtime = publicShareTunnelRuntimes.get(documentId);
+  publicShareTunnelRuntimes.delete(documentId);
+  if (runtime?.expiresTimer) {
+    clearTimeout(runtime.expiresTimer);
+  }
+  if (runtime?.close) {
+    await runtime.close();
+  }
+}
+
+function schedulePublicShareExpiry(documentId, expiresAt) {
+  const delay = getPublicShareExpiryDelay(expiresAt);
+  if (delay === null) {
+    return null;
+  }
+
+  return setTimeout(() => {
+    disableTemporaryPublicShare(documentId).catch((error) => {
+      console.error('[Share] Failed to auto-close expired public share:', error);
+    });
+  }, delay);
+}
+
+async function createTemporaryPublicShare(documentId, options = {}) {
+  if (!shareServerRuntime) {
+    throw new Error('Local share server is not ready');
+  }
+
+  const share = createPublicShare(documentId, options);
+  try {
+    await closePublicShareTunnel(documentId);
+    const tunnelRuntime = await startCloudflareTunnel({
+      localUrl: `http://127.0.0.1:${shareServerRuntime.port}`,
+      onUnexpectedExit: (detail) => {
+        void handleUnexpectedPublicShareTunnelExit(documentId, detail);
+      },
+    });
+    publicShareTunnelRuntimes.set(documentId, {
+      ...tunnelRuntime,
+      expiresTimer: schedulePublicShareExpiry(documentId, share.publicExpiresAt),
+    });
+    return attachShareUrls(share);
+  } catch (error) {
+    disablePublicShare(documentId);
+    throw error;
+  }
+}
+
+async function disableTemporaryPublicShare(documentId) {
+  await closePublicShareTunnel(documentId);
+  return attachShareUrls(disablePublicShare(documentId));
+}
+
+async function disableWorkspaceShares(spaceId) {
+  const shares = listSharesForSpace(spaceId);
+  await Promise.all(shares.map((share) => closePublicShareTunnel(share.documentId)));
+  return disableSharesForSpace(spaceId);
 }
 
 async function resolveExportPayloadPath({
@@ -228,6 +363,12 @@ function getBinaryExportDialogMeta(fileName) {
     return {
       title: '导出 Word',
       filters: [{ name: 'Word', extensions: ['docx'] }],
+    };
+  }
+  if (normalized.endsWith('.xlsx')) {
+    return {
+      title: '导出 Excel',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
     };
   }
 
@@ -287,7 +428,13 @@ function registerExportIpcHandlers({
       bytes: payload.bytes ?? payload.data ?? [],
     });
 
-    return toExportActionResult(result, dialogMeta.title === '导出 Word' ? 'Word 已导出' : '文件已导出');
+    const successMessage = dialogMeta.title === '导出 Word'
+      ? 'Word 已导出'
+      : dialogMeta.title === '导出 Excel'
+        ? 'Excel 已导出'
+        : '文件已导出';
+
+    return toExportActionResult(result, successMessage);
   });
 
   ipc.handle('exports:savePdfFromHtml', async (event, payload = {}) => {
@@ -339,6 +486,110 @@ const createWindow = () => {
 
   void window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 };
+
+function normalizeExternalMarkdownFilePath(filePath) {
+  if (!isExternalMarkdownFilePath(filePath)) {
+    return '';
+  }
+
+  return path.resolve(String(filePath).trim());
+}
+
+function loadRendererRoute(window, routeSearchParams = '') {
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    const routeUrl = new URL(devServerUrl);
+    routeUrl.search = routeSearchParams;
+    void window.loadURL(routeUrl.toString());
+    return;
+  }
+
+  void window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
+    search: routeSearchParams,
+  });
+}
+
+function createExternalMarkdownFileWindow(filePath) {
+  const normalizedFilePath = normalizeExternalMarkdownFilePath(filePath);
+  if (!normalizedFilePath) {
+    return null;
+  }
+
+  const existingWindow = externalFileWindowsByPath.get(normalizedFilePath);
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    existingWindow.focus();
+    return existingWindow;
+  }
+
+  const window = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 980,
+    minHeight: 720,
+    backgroundColor: '#f7f9fc',
+    title: `${path.basename(normalizedFilePath)} - WorkKnowlage`,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  externalFileWindowsByPath.set(normalizedFilePath, window);
+  externalFilePathsByWebContentsId.set(window.webContents.id, normalizedFilePath);
+  window.on('closed', () => {
+    externalFileWindowsByPath.delete(normalizedFilePath);
+    externalFilePathsByWebContentsId.delete(window.webContents.id);
+  });
+
+  loadRendererRoute(window, 'view=external-file');
+  return window;
+}
+
+function openExternalMarkdownFile(filePath) {
+  const normalizedFilePath = normalizeExternalMarkdownFilePath(filePath);
+  if (!normalizedFilePath) {
+    return null;
+  }
+
+  if (!externalFileHandlingReady) {
+    pendingExternalMarkdownFilePaths.push(normalizedFilePath);
+    return null;
+  }
+
+  return createExternalMarkdownFileWindow(normalizedFilePath);
+}
+
+function openExternalMarkdownFiles(filePaths = []) {
+  return filePaths
+    .map((filePath) => openExternalMarkdownFile(filePath))
+    .filter(Boolean);
+}
+
+function flushPendingExternalMarkdownFilePaths() {
+  const filePaths = pendingExternalMarkdownFilePaths.splice(0, pendingExternalMarkdownFilePaths.length);
+  openExternalMarkdownFiles(filePaths);
+}
+
+function drainStartupExternalMarkdownFilePaths(argv = process.argv) {
+  const filePaths = [
+    ...pendingExternalMarkdownFilePaths.splice(0, pendingExternalMarkdownFilePaths.length),
+    ...findExternalMarkdownFilePaths(argv),
+  ]
+    .map((filePath) => normalizeExternalMarkdownFilePath(filePath))
+    .filter(Boolean);
+
+  return [...new Set(filePaths)];
+}
+
+function getExternalMarkdownFilePathForEvent(event) {
+  const filePath = externalFilePathsByWebContentsId.get(event.sender.id);
+  if (!filePath) {
+    throw new Error('当前窗口没有绑定外部 Markdown 文件。');
+  }
+
+  return filePath;
+}
 
 function registerIpcHandlers() {
   registerExportIpcHandlers();
@@ -590,12 +841,40 @@ function registerIpcHandlers() {
   });
 
   // ─── Local shares ─────────────────────────────────────
-  ipcMain.handle('shares:get', (_event, documentId) => attachPublicUrl(getShareByDocumentId(documentId)));
-  ipcMain.handle('shares:create', (_event, documentId) => attachPublicUrl(createShare(documentId)));
-  ipcMain.handle('shares:regenerate', (_event, documentId) => attachPublicUrl(regenerateShare(documentId)));
-  ipcMain.handle('shares:disable', (_event, documentId) => attachPublicUrl(disableShare(documentId)));
+  ipcMain.handle('shares:get', (_event, documentId) => attachShareUrls(getShareByDocumentId(documentId)));
+  ipcMain.handle('shares:create', (_event, documentId) => attachLocalShareUrl(createShare(documentId)));
+  ipcMain.handle('shares:regenerate', (_event, documentId) => attachLocalShareUrl(regenerateShare(documentId)));
+  ipcMain.handle('shares:disable', (_event, documentId) => attachShareUrls(disableShare(documentId)));
+  ipcMain.handle('shares:createPublic', (_event, documentId, options) => createTemporaryPublicShare(documentId, options));
+  ipcMain.handle('shares:disablePublic', (_event, documentId) => disableTemporaryPublicShare(documentId));
+  ipcMain.handle('shares:listForSpace', (_event, spaceId) =>
+    listSharesForSpace(spaceId).map((share) => attachWorkspaceShareUrls(share))
+  );
+  ipcMain.handle('shares:disableAllForSpace', (_event, spaceId) => disableWorkspaceShares(spaceId));
   ipcMain.handle('shares:getPublicUrl', (_event, token) =>
     shareServerRuntime ? shareServerRuntime.getPublicUrl(token) : ''
+  );
+
+  // ─── External Markdown files ─────────────────────────
+  ipcMain.handle('externalFiles:getInitial', (event) =>
+    readExternalMarkdownFile(getExternalMarkdownFilePathForEvent(event))
+  );
+  ipcMain.handle('externalFiles:saveMarkdown', (event, markdown) =>
+    saveExternalMarkdownFile(getExternalMarkdownFilePathForEvent(event), markdown)
+  );
+  ipcMain.handle('externalFiles:revealInFinder', (event) => {
+    shell.showItemInFolder(getExternalMarkdownFilePathForEvent(event));
+    return true;
+  });
+  ipcMain.handle('externalFiles:importToWorkspace', (event, payload) =>
+    importExternalMarkdownFile({
+      title: payload?.title || path.basename(getExternalMarkdownFilePathForEvent(event)),
+      contentJson: payload?.contentJson ?? '[]',
+    }, {
+      spacesRepo,
+      documentsRepo,
+      syncSearchAndBacklinksForSpace,
+    })
   );
 
   // ─── Tags ─────────────────────────────────────────────
@@ -615,12 +894,20 @@ async function bootstrap() {
   shareServerRuntime = await startShareServer({
     documentsRepo,
     shareRepository,
+    spreadsheetsRepo,
     uploadStorage,
     userDataDir,
   });
 
   registerIpcHandlers();
-  createWindow();
+  externalFileHandlingReady = true;
+  const startupExternalFilePaths = drainStartupExternalMarkdownFilePaths(process.argv);
+  if (startupExternalFilePaths.length > 0) {
+    openExternalMarkdownFiles(startupExternalFilePaths);
+  } else {
+    createWindow();
+    flushPendingExternalMarkdownFilePaths();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -630,12 +917,26 @@ async function bootstrap() {
 }
 
 if (app && typeof app.whenReady === 'function' && require.main === module) {
-  app.whenReady().then(() => {
-    void bootstrap().catch((error) => {
-      console.error('[App] Failed to bootstrap WorkKnowlage:', error);
-      app.quit();
+  const gotSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!gotSingleInstanceLock) {
+    app.quit();
+  } else {
+    app.on('second-instance', (_event, argv) => {
+      openExternalMarkdownFiles(findExternalMarkdownFilePaths(argv));
     });
-  });
+
+    app.on('open-file', (event, filePath) => {
+      event.preventDefault();
+      openExternalMarkdownFile(filePath);
+    });
+
+    app.whenReady().then(() => {
+      void bootstrap().catch((error) => {
+        console.error('[App] Failed to bootstrap WorkKnowlage:', error);
+        app.quit();
+      });
+    });
+  }
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -649,6 +950,12 @@ if (app && typeof app.whenReady === 'function' && require.main === module) {
         console.error('[App] Failed to close share server:', error);
       });
     }
+    publicShareTunnelRuntimes.forEach((runtime) => {
+      void runtime.close?.().catch((error) => {
+        console.error('[App] Failed to close public share tunnel:', error);
+      });
+    });
+    publicShareTunnelRuntimes.clear();
     closeDatabase();
   });
 }
@@ -657,4 +964,9 @@ module.exports = {
   bootstrap,
   registerIpcHandlers,
   registerExportIpcHandlers,
+  createExternalMarkdownFileWindow,
+  drainStartupExternalMarkdownFilePaths,
+  findExternalMarkdownFilePaths,
+  normalizeExternalMarkdownFilePath,
+  openExternalMarkdownFile,
 };

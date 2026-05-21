@@ -59,10 +59,22 @@ const normalizeExportAssetUrl = (value: unknown) => {
 
 const isListType = (type: string) => type === 'bulletListItem' || type === 'numberedListItem';
 
+const getCodeBlockLanguage = (block: any) => sanitizeCssValue(block?.props?.language).toLowerCase();
+
+const getCodeBlockSource = (block: any) =>
+  typeof block?.content === 'string' ? block.content : extractInlineText(block?.content);
+
+const isMermaidCodeBlock = (block: any) => {
+  const language = getCodeBlockLanguage(block);
+  return language === 'mermaid' || language === 'mmd';
+};
+
+const getMermaidBlockKey = (block: any) => String(block?.id || getCodeBlockSource(block));
+
 const renderMarkdownCodeBlock = (block: any) => {
   const rawLanguage = sanitizeCssValue(block?.props?.language);
   const language = rawLanguage && rawLanguage !== 'text' ? rawLanguage : '';
-  const code = typeof block?.content === 'string' ? block.content : extractInlineText(block?.content);
+  const code = getCodeBlockSource(block);
   const fence = code.includes('```') ? '````' : '```';
   return `${fence}${language}\n${code}\n${fence}`;
 };
@@ -351,6 +363,58 @@ const buildBlockAlignmentStyle = (value: unknown) => {
   return alignment ? ` style="text-align:${escapeHtml(sanitizeCssValue(alignment))}"` : '';
 };
 
+const sanitizeMermaidSvg = (svg: unknown) =>
+  String(svg || '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
+    .trim();
+
+const collectMermaidCodeBlocks = (blocks: unknown, output: any[] = []) => {
+  const list = Array.isArray(blocks) ? blocks : [];
+  for (const block of list as any[]) {
+    if (block?.type === 'codeBlock' && isMermaidCodeBlock(block)) {
+      output.push(block);
+    }
+
+    if (Array.isArray(block?.children) && block.children.length > 0) {
+      collectMermaidCodeBlocks(block.children, output);
+    }
+  }
+
+  return output;
+};
+
+const buildMermaidSvgMap = async (blocks: unknown) => {
+  const mermaidBlocks = collectMermaidCodeBlocks(blocks);
+  const svgByKey = new Map<string, string>();
+  if (mermaidBlocks.length === 0) {
+    return svgByKey;
+  }
+
+  const mod = await import('mermaid');
+  const mermaid = (mod as any).default || mod;
+  mermaid.initialize?.({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'default',
+  });
+
+  await Promise.all(mermaidBlocks.map(async (block, index) => {
+    const source = getCodeBlockSource(block).trim();
+    if (!source) {
+      return;
+    }
+
+    const result = await mermaid.render(`wk-pdf-mermaid-${index}`, source);
+    const svg = sanitizeMermaidSvg(result?.svg ?? result);
+    if (svg) {
+      svgByKey.set(getMermaidBlockKey(block), svg);
+    }
+  }));
+
+  return svgByKey;
+};
+
 export const extractInlineText = (content: unknown): string => {
   if (typeof content === 'string') {
     return content;
@@ -453,7 +517,10 @@ export const toMarkdownFromBlocks = (blocks: unknown, depth = 0): string => {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 };
 
-export const toPrintHtmlFromBlocks = (blocks: unknown): string => {
+export const toPrintHtmlFromBlocks = (
+  blocks: unknown,
+  options: { mermaidSvgByKey?: Map<string, string> } = {},
+): string => {
   const renderListItem = (block: any) => {
     const text = renderInlineHtml(block?.content);
     const childHtml = Array.isArray(block?.children) && block.children.length > 0 ? renderBlocks(block.children) : '';
@@ -517,8 +584,15 @@ export const toPrintHtmlFromBlocks = (blocks: unknown): string => {
     }
 
     if (type === 'codeBlock') {
-      const code = escapeHtml(typeof block?.content === 'string' ? block.content : extractInlineText(block?.content));
-      return `<pre><code>${code}</code></pre>${childHtml}`;
+      const code = getCodeBlockSource(block);
+      const renderedMermaidSvg = isMermaidCodeBlock(block)
+        ? options.mermaidSvgByKey?.get(getMermaidBlockKey(block))
+        : '';
+      if (renderedMermaidSvg) {
+        return `<figure class="kb-export-mermaid">${renderedMermaidSvg}<figcaption>Mermaid</figcaption></figure>${childHtml}`;
+      }
+      const escapedCode = escapeHtml(code);
+      return `<pre><code>${escapedCode}</code></pre>${childHtml}`;
     }
 
     return `<p${alignmentAttr}>${text || '<br />'}</p>${childHtml}`;
@@ -759,6 +833,24 @@ export const buildPrintHtmlDocument = (bodyHtml: string, title = '文档') => `<
         border-top: 1px solid var(--kb-export-border);
         margin: 22px 0;
       }
+      .kb-export-mermaid {
+        margin: 18px 0;
+        padding: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 14px;
+        background: #ffffff;
+        text-align: center;
+        break-inside: avoid;
+      }
+      .kb-export-mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
+      .kb-export-mermaid figcaption {
+        margin-top: 8px;
+        color: var(--kb-export-muted);
+        font-size: 0.86em;
+      }
     </style>
   </head>
   <body>
@@ -771,6 +863,11 @@ export const buildPrintHtmlDocument = (bodyHtml: string, title = '文档') => `<
 
 export const toPrintHtmlDocumentFromBlocks = (blocks: unknown, title = '文档') =>
   buildPrintHtmlDocument(toPrintHtmlFromBlocks(blocks), title);
+
+export const toPrintHtmlDocumentFromBlocksWithMermaid = async (blocks: unknown, title = '文档') => {
+  const mermaidSvgByKey = await buildMermaidSvgMap(blocks);
+  return buildPrintHtmlDocument(toPrintHtmlFromBlocks(blocks, { mermaidSvgByKey }), title);
+};
 
 export const stripInteractiveExportNodes = (rawHtml = '') => {
   if (!rawHtml || typeof window === 'undefined' || typeof DOMParser === 'undefined') {

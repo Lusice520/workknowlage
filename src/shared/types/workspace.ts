@@ -125,7 +125,7 @@ export interface QuickLinkItem {
   label: string;
 }
 
-export type WorkspaceCollectionView = 'tree' | 'all-notes' | 'favorites' | 'trash';
+export type WorkspaceCollectionView = 'tree' | 'all-notes' | 'shared-links' | 'favorites' | 'trash';
 
 export interface WorkspaceSeed {
   spaces: Space[];

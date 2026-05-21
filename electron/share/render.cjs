@@ -93,6 +93,87 @@ function normalizeBlocks(document) {
   return Array.isArray(parsed) ? parsed : [];
 }
 
+function normalizeSpreadsheetSheets(workbookJson) {
+  const workbook = parseJsonMaybe(workbookJson, {});
+  const sheets = workbook && typeof workbook === 'object' && workbook.sheets && typeof workbook.sheets === 'object'
+    ? workbook.sheets
+    : {};
+  const orderedIds = Array.isArray(workbook?.sheetOrder)
+    ? workbook.sheetOrder.filter((id) => typeof id === 'string' && sheets[id])
+    : [];
+  const sheetIds = orderedIds.length > 0 ? orderedIds : Object.keys(sheets);
+
+  return sheetIds
+    .map((id, index) => {
+      const sheet = sheets[id];
+      if (!sheet || typeof sheet !== 'object') {
+        return null;
+      }
+
+      return {
+        id,
+        name: String(sheet.name || `Sheet${index + 1}`),
+        cellData: sheet.cellData && typeof sheet.cellData === 'object' ? sheet.cellData : {},
+      };
+    })
+    .filter(Boolean);
+}
+
+function getSpreadsheetCellValue(cell) {
+  if (!cell || typeof cell !== 'object') {
+    return '';
+  }
+  if (cell.v !== undefined && cell.v !== null) {
+    return String(cell.v);
+  }
+  if (cell.p !== undefined && cell.p !== null) {
+    return String(cell.p);
+  }
+  return '';
+}
+
+function renderSpreadsheetShareTable(workbookJson) {
+  const sheets = normalizeSpreadsheetSheets(workbookJson);
+  if (sheets.length === 0) {
+    return '<p class="share-spreadsheet-empty">这个表格暂时没有可分享的内容。</p>';
+  }
+
+  return sheets.map((sheet) => {
+    const rows = Object.keys(sheet.cellData)
+      .map((key) => Number(key))
+      .filter((index) => Number.isInteger(index) && index >= 0)
+      .sort((left, right) => left - right);
+    const maxColumnIndex = rows.reduce((max, rowIndex) => {
+      const row = sheet.cellData[String(rowIndex)];
+      if (!row || typeof row !== 'object') {
+        return max;
+      }
+
+      return Math.max(
+        max,
+        ...Object.keys(row).map((key) => Number(key)).filter((index) => Number.isInteger(index) && index >= 0),
+      );
+    }, 0);
+    const renderedRows = (rows.length > 0 ? rows : [0]).map((rowIndex) => {
+      const row = sheet.cellData[String(rowIndex)] || {};
+      const cells = Array.from({ length: Math.max(1, maxColumnIndex + 1) }, (_, columnIndex) => {
+        const value = getSpreadsheetCellValue(row[String(columnIndex)]);
+        return `<td>${value ? escapeInlineText(value) : '&nbsp;'}</td>`;
+      }).join('');
+
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    return `
+      <section class="share-spreadsheet-sheet">
+        <h2>${escapeHtml(sheet.name)}</h2>
+        <div class="share-spreadsheet-wrap">
+          <table class="share-spreadsheet-table"><tbody>${renderedRows}</tbody></table>
+        </div>
+      </section>`;
+  }).join('');
+}
+
 function resolveAssetUrl(url, origin) {
   const raw = String(url || '').trim();
   if (!raw) return '';
@@ -687,12 +768,15 @@ function extractHeadings(blocks, headings = []) {
   return headings;
 }
 
-function buildShareHtml({ document, share, origin }) {
-  const blocks = normalizeBlocks(document);
-  const bodyHtml = renderBlockSequence(blocks, origin);
-  const headings = extractHeadings(blocks);
+function buildShareHtml({ document, share, origin, spreadsheetWorkbookJson = '' }) {
+  const isSpreadsheet = document?.kind === 'spreadsheet';
+  const blocks = isSpreadsheet ? [] : normalizeBlocks(document);
+  const bodyHtml = isSpreadsheet
+    ? renderSpreadsheetShareTable(spreadsheetWorkbookJson)
+    : renderBlockSequence(blocks, origin);
+  const headings = isSpreadsheet ? [] : extractHeadings(blocks);
   const title = escapeHtml(document?.title || 'WorkKnowlage');
-  const badge = escapeHtml(document?.badgeLabel || '');
+  const badge = escapeHtml(isSpreadsheet ? '表格' : document?.badgeLabel || '');
   const updatedAt = escapeHtml(document?.updatedAtLabel || '');
   const shareState = share?.enabled ? '已开启只读分享' : '分享已关闭';
   const tocHtml = headings.length > 0
@@ -1174,6 +1258,39 @@ function buildShareHtml({ document, share, origin }) {
       font-size: 14px;
     }
     .share-table th { background: #f1f5f9; font-weight: 650; color: #172033; }
+    .share-spreadsheet-sheet h2 {
+      margin: 0 0 14px;
+      color: #172033;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    .share-spreadsheet-wrap {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+    }
+    .share-spreadsheet-table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .share-spreadsheet-table td {
+      min-width: 120px;
+      height: 34px;
+      border: 1px solid #dbe3ee;
+      padding: 7px 10px;
+      color: #1f2937;
+      font-size: 13px;
+      line-height: 1.45;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    .share-spreadsheet-empty {
+      color: var(--muted);
+    }
     .kb-doc-mention {
       display: inline-flex;
       align-items: center;

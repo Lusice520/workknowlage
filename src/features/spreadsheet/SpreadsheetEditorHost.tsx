@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createUniver, LocaleType, type IWorkbookData } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import sheetsCoreZhCN from '@univerjs/preset-sheets-core/locales/zh-CN';
+import { ChevronDown, Database, Home, Plus, Sigma } from 'lucide-react';
 import type { SpreadsheetWorkbookRecord } from '../../shared/types/preload';
 import type { DocumentRecord } from '../../shared/types/workspace';
 import { useSpreadsheetPersistence, type SpreadsheetSaveStatus } from './useSpreadsheetPersistence';
@@ -19,6 +20,7 @@ type SpreadsheetWorkbookHandle = {
 };
 
 type SpreadsheetLoadStatus = 'loading' | 'ready' | 'error';
+type RibbonTabLabel = '开始' | '插入' | '公式' | '数据';
 
 interface SpreadsheetEditorHostProps {
   document: DocumentRecord;
@@ -94,6 +96,43 @@ const normalizeWorkbookData = (
 const getErrorMessage = (error: unknown) =>
   error instanceof Error && error.message ? error.message : '请稍后重试';
 
+const ribbonTabs: Array<{
+  label: RibbonTabLabel;
+  description: string;
+  icon: typeof Home;
+}> = [
+  {
+    label: '开始',
+    description: '初始化工作表并设置基本参数。',
+    icon: Home,
+  },
+  {
+    label: '插入',
+    description: '插入行、列、图表和各种其他元素。',
+    icon: Plus,
+  },
+  {
+    label: '公式',
+    description: '使用函数和公式进行数据计算。',
+    icon: Sigma,
+  },
+  {
+    label: '数据',
+    description: '管理数据，包括导入、排序和筛选。',
+    icon: Database,
+  },
+];
+
+const decorateUniverRibbon = (containerElement: HTMLElement) => {
+  const tablist = containerElement.querySelector<HTMLElement>('[role="tablist"][aria-label="ribbon.menu"]');
+  const ribbonRow = tablist?.parentElement;
+  const toolbarRow = ribbonRow?.nextElementSibling;
+
+  tablist?.setAttribute('aria-hidden', 'true');
+  ribbonRow?.classList.add('wk-univer-ribbon-row');
+  toolbarRow?.classList.add('wk-univer-toolbar-row');
+};
+
 export function SpreadsheetEditorHost({
   document,
   onContentSnapshotReady,
@@ -105,6 +144,8 @@ export function SpreadsheetEditorHost({
   const [workbookData, setWorkbookData] = useState<Partial<IWorkbookData> | null>(null);
   const [loadStatus, setLoadStatus] = useState<SpreadsheetLoadStatus>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabLabel>('开始');
+  const [ribbonMenuOpen, setRibbonMenuOpen] = useState(false);
   const { attachWorkbook, getWorkbookJson, scheduleSave } = useSpreadsheetPersistence({
     documentId: document.id,
     onSaveStatusChange,
@@ -157,6 +198,7 @@ export function SpreadsheetEditorHost({
     let workbook: SpreadsheetWorkbookHandle | null = null;
     let univer: { dispose: () => void } | null = null;
     let rpcWorker: Worker | null = null;
+    let ribbonObserver: MutationObserver | null = null;
 
     try {
       containerElement.innerHTML = '';
@@ -188,6 +230,9 @@ export function SpreadsheetEditorHost({
       commandDisposable = workbook.onCommandExecuted(() => {
         scheduleSave();
       });
+      decorateUniverRibbon(containerElement);
+      ribbonObserver = new MutationObserver(() => decorateUniverRibbon(containerElement));
+      ribbonObserver.observe(containerElement, { childList: true, subtree: true });
       setLoadStatus('ready');
     } catch (error) {
       console.error('[SpreadsheetEditorHost] Failed to initialize Univer:', error);
@@ -199,6 +244,7 @@ export function SpreadsheetEditorHost({
     }
 
     return () => {
+      ribbonObserver?.disconnect();
       commandDisposable?.dispose();
       attachWorkbook(null);
       workbook?.dispose?.();
@@ -208,11 +254,60 @@ export function SpreadsheetEditorHost({
     };
   }, [attachWorkbook, document.id, scheduleSave, workbookData]);
 
+  const selectRibbonTab = (label: RibbonTabLabel) => {
+    const tab = Array.from(
+      containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="tablist"][aria-label="ribbon.menu"] [role="tab"]') ?? [],
+    ).find((item) => item.textContent?.trim() === label);
+
+    tab?.click();
+    setActiveRibbonTab(label);
+    setRibbonMenuOpen(false);
+  };
+
   return (
     <section
       data-testid="spreadsheet-editor-host"
       className="wk-spreadsheet-host"
     >
+      {loadStatus === 'ready' ? (
+        <div className="wk-spreadsheet-ribbon-picker">
+          <button
+            type="button"
+            className="wk-spreadsheet-ribbon-trigger"
+            aria-haspopup="menu"
+            aria-expanded={ribbonMenuOpen}
+            onClick={() => setRibbonMenuOpen((current) => !current)}
+          >
+            <span>{activeRibbonTab}</span>
+            <ChevronDown size={14} />
+          </button>
+          {ribbonMenuOpen ? (
+            <div className="wk-spreadsheet-ribbon-menu" role="menu">
+              {ribbonTabs.map((tab) => {
+                const Icon = tab.icon;
+
+                return (
+                  <button
+                    key={tab.label}
+                    type="button"
+                    role="menuitem"
+                    className="wk-spreadsheet-ribbon-item"
+                    onClick={() => selectRibbonTab(tab.label)}
+                  >
+                    <span className="wk-spreadsheet-ribbon-icon" aria-hidden="true">
+                      <Icon size={19} />
+                    </span>
+                    <span className="wk-spreadsheet-ribbon-copy">
+                      <span className="wk-spreadsheet-ribbon-title">{tab.label}</span>
+                      <span className="wk-spreadsheet-ribbon-description">{tab.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div
         ref={containerRef}
         className="wk-spreadsheet-container"

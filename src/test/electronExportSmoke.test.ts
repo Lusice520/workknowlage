@@ -92,6 +92,7 @@ test('registers export ipc handlers for text, binary, and pdf', async () => {
   const tempDir = await createTempDir();
   const textPath = path.join(tempDir, 'ipc-export.txt');
   const binaryPath = path.join(tempDir, 'ipc-export.bin');
+  const xlsxPath = path.join(tempDir, 'ipc-export.xlsx');
   const pdfPath = path.join(tempDir, 'ipc-export.pdf');
   const fakeWindow = {
     webContents: {
@@ -139,6 +140,18 @@ test('registers export ipc handlers for text, binary, and pdf', async () => {
     path: binaryPath,
   });
 
+  await expect(handlers['exports:saveBinary']({
+    sender: null,
+  }, {
+    outputPath: xlsxPath,
+    fileName: '预算表.xlsx',
+    bytes: Uint8Array.from([0x50, 0x4b, 0x03, 0x04]),
+  })).resolves.toEqual({
+    success: true,
+    message: 'Excel 已导出',
+    path: xlsxPath,
+  });
+
   await expect(handlers['exports:savePdfFromHtml']({
     sender: null,
   }, {
@@ -153,5 +166,6 @@ test('registers export ipc handlers for text, binary, and pdf', async () => {
 
   expect(await fs.readFile(textPath, 'utf8')).toBe('ipc text');
   expect((await fs.readFile(binaryPath)).length).toBe(3);
+  expect((await fs.readFile(xlsxPath))[0]).toBe(0x50);
   expect(await fs.readFile(pdfPath)).toEqual(Buffer.from('pdf-ipc'));
 });

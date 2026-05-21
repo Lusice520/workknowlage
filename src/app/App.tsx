@@ -39,19 +39,29 @@ export default function App() {
   const [activeDocumentContentSnapshotGetter, setActiveDocumentContentSnapshotGetter] = useState<(() => string) | null>(null);
   const [documentNavigationFeedback, setDocumentNavigationFeedback] = useState<string | null>(null);
   const documentFocusRequestKeyRef = useRef(0);
+  const workspaceState = session.workspaceState;
+  const activeCollectionView = workspaceState?.activeCollectionView ?? 'tree';
+  const selectedDocument = workspaceState ? getActiveDocument(workspaceState) : null;
+  const activeDocument = session.activeQuickNoteDate || activeCollectionView !== 'tree'
+    ? null
+    : selectedDocument;
+  const activeFolder = activeDocument?.folderId && workspaceState
+    ? getFolderById(workspaceState, activeDocument.folderId)
+    : null;
   const search = useWorkspaceSearch({
-    activeSpaceId: session.workspaceState?.activeSpaceId,
-    documents: session.workspaceState?.seed.documents,
+    activeSpaceId: workspaceState?.activeSpaceId,
+    documents: workspaceState?.seed.documents,
     refreshKey: session.quickNoteRefreshKey,
   });
   const share = useDocumentShare({
     activeDocumentId: session.activeQuickNoteDate
       ? null
       : session.workspaceState?.activeDocumentId ?? null,
+    activeDocumentKind: selectedDocument?.kind ?? 'note',
     activeQuickNoteDate: session.activeQuickNoteDate,
     onSaveDocumentContent: session.saveDocumentContent,
   });
-  const activeSpaceId = session.workspaceState?.activeSpaceId ?? null;
+  const activeSpaceId = workspaceState?.activeSpaceId ?? null;
 
   const loadTrashItems = async (spaceId: string | null) => {
     if (!spaceId) {
@@ -92,17 +102,9 @@ export default function App() {
     };
   }, [session.activeQuickNoteDate, session.quickNoteRefreshKey]);
 
-  const workspaceState = session.workspaceState;
-  const activeCollectionView = workspaceState?.activeCollectionView ?? 'tree';
-  const selectedDocument = workspaceState ? getActiveDocument(workspaceState) : null;
-  const activeDocument = session.activeQuickNoteDate || activeCollectionView !== 'tree'
-    ? null
-    : selectedDocument;
-  const activeFolder = activeDocument?.folderId && workspaceState
-    ? getFolderById(workspaceState, activeDocument.folderId)
-    : null;
   const exportState = useDocumentExport({
     activeDocumentId: activeDocument?.id ?? null,
+    activeDocumentKind: activeDocument?.kind ?? 'note',
     activeDocumentTitle: activeDocument?.title ?? null,
     activeQuickNoteDate: session.activeQuickNoteDate,
     getCurrentContentJson: activeDocumentContentSnapshotGetter ?? (() => activeDocument?.contentJson ?? '[]'),
@@ -461,13 +463,32 @@ export default function App() {
   };
 
   const shareValue = {
-    shareInfo: share.shareInfo ? { token: share.shareInfo.token, url: share.shareInfo.publicUrl } : null,
+    shareInfo: share.shareInfo ? {
+      token: share.shareInfo.token,
+      url: share.shareInfo.publicUrl,
+      enabled: share.shareInfo.enabled,
+      localUrl: share.shareInfo.localUrl,
+      publicToken: share.shareInfo.publicToken,
+      publicEnabled: share.shareInfo.publicEnabled,
+      publicUrl: share.shareInfo.publicUrl,
+      publicPassword: share.shareInfo.publicPassword,
+      publicExpiresAt: share.shareInfo.publicExpiresAt,
+    } : null,
     shareBusy: share.shareBusy,
     shareLoading: share.shareLoading,
     shareStatusText: share.shareStatusText,
+    shareCanCopyPublicPassword: share.shareCanCopyPublicPassword,
     onShareDocument: share.shareDocument,
+    onSharePublicDocument: share.sharePublicDocument,
     onRegenerateShareDocument: share.regenerateShareDocument,
     onDisableShareDocument: share.disableShareDocument,
+    onDisablePublicShareDocument: share.disablePublicShareDocument,
+    onCopyLocalShareLink: share.copyLocalShareLink,
+    onCopyPublicShareLink: share.copyPublicShareLink,
+    onCopyPublicShareLinkWithPassword: share.copyPublicShareLinkWithPassword,
+    onListSharesForSpace: share.listSharesForSpace,
+    onResetPublicShare: share.resetPublicShareDocument,
+    onDisableAllSharesForSpace: share.disableAllSharesForSpace,
   };
 
   const exportValue = {
@@ -475,6 +496,7 @@ export default function App() {
     exportStatusText: exportState.exportStatusText,
     onExportMarkdown: exportState.exportMarkdown,
     onExportPdf: exportState.exportPdf,
+    onExportSpreadsheet: exportState.exportSpreadsheet,
     onExportWord: exportState.exportWord,
   };
 

@@ -1,6 +1,6 @@
 import { useState, type DragEvent } from 'react';
 import { MantineProvider } from '@mantine/core';
-import { ChevronsUpDown, FileText, Star } from 'lucide-react';
+import { ChevronsUpDown, FileText, Link2, Star } from 'lucide-react';
 import { getRootDocuments, getRootFolders } from '../../shared/lib/workspaceSelectors';
 import type { WorkspaceSearchResultRecord } from '../../shared/types/preload';
 import type { DocumentCreateOptions, Space, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
@@ -326,7 +326,7 @@ export function LeftSidebar({
                 aria-pressed={isActive}
                 className={`${navRowClass} ${isActive ? activeNavRowClass : inactiveNavRowClass}`}
                 onClick={() => {
-                  if (item.id === 'all-notes' || item.id === 'favorites') {
+                  if (item.id === 'all-notes' || item.id === 'shared-links' || item.id === 'favorites') {
                     onSelectCollectionView?.(item.id);
                   }
                 }}
@@ -338,6 +338,8 @@ export function LeftSidebar({
                 >
                   {item.id === 'favorites' ? (
                     <Star size={16} fill={isActive ? 'currentColor' : 'none'} />
+                  ) : item.id === 'shared-links' ? (
+                    <Link2 size={16} />
                   ) : (
                     <FileText size={16} />
                   )}

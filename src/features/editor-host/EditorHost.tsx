@@ -143,6 +143,13 @@ const findEditorDocumentBlockIdByText = (blocks: unknown[], fallbackText: string
 export interface EditorHostShareInfo {
   token: string;
   url?: string;
+  enabled?: boolean;
+  localUrl?: string;
+  publicToken?: string;
+  publicEnabled?: boolean;
+  publicUrl?: string;
+  publicPassword?: string;
+  publicExpiresAt?: string | null;
 }
 
 export interface EditorHostFocusDiagnostic {

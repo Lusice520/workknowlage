@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -8,6 +9,23 @@ const { buildShareHtml } = require('./render.cjs');
 const LOOPBACK_SHARE_HOST = '127.0.0.1';
 const SHARE_LISTEN_HOST = '0.0.0.0';
 const MERMAID_DIST_DIR = path.resolve(__dirname, '..', '..', 'node_modules', 'mermaid', 'dist');
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return '';
+  }
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 const CONTENT_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -100,6 +118,23 @@ function getRequestOrigin(request, fallbackOrigin) {
   return fallbackOrigin;
 }
 
+function buildPublicShareAssetOrigin(origin, publicToken) {
+  return `${origin}/public/share/${encodeURIComponent(publicToken)}`;
+}
+
+function isPublicTunnelHost(host) {
+  return /(^|\.)trycloudflare\.com(?::\d+)?$/i.test(String(host || '').trim());
+}
+
+function isAllowedPublicTunnelPath(pathname) {
+  return (
+    pathname === '/' ||
+    pathname === '/healthz' ||
+    pathname.startsWith('/public/share/') ||
+    pathname.startsWith('/vendor/mermaid/')
+  );
+}
+
 function sendJson(res, statusCode, payload, method = 'GET') {
   const body = JSON.stringify(payload);
   res.writeHead(statusCode, {
@@ -118,6 +153,90 @@ function sendText(res, statusCode, body, contentType = 'text/plain; charset=utf-
     'Cache-Control': 'no-store',
   });
   res.end(method === 'HEAD' ? undefined : value);
+}
+
+function sendRedirect(res, location, headers = {}) {
+  res.writeHead(303, {
+    Location: location,
+    'Cache-Control': 'no-store',
+    ...headers,
+  });
+  res.end();
+}
+
+function readRequestBody(request, limit = 1024 * 8) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > limit) {
+        reject(new Error('Request body is too large'));
+        request.destroy();
+      }
+    });
+    request.on('end', () => resolve(body));
+    request.on('error', reject);
+  });
+}
+
+function parseCookieHeader(cookieHeader) {
+  return String(cookieHeader || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) {
+        return cookies;
+      }
+
+      cookies[part.slice(0, separatorIndex)] = safeDecodeURIComponent(part.slice(separatorIndex + 1));
+      return cookies;
+    }, {});
+}
+
+function getPublicShareSessionCookieName(publicToken) {
+  return `wk_public_share_${String(publicToken || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+}
+
+function renderPublicSharePasswordPage({ action, message = '', status = 200 }) {
+  const messageHtml = message
+    ? `<p class="message" role="alert">${escapeHtml(message)}</p>`
+    : '';
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>访问密码</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(420px, calc(100vw - 40px)); border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; padding: 28px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08); }
+    h1 { margin: 0; font-size: 22px; line-height: 1.2; }
+    p { color: #64748b; line-height: 1.7; }
+    label { display: grid; gap: 8px; margin-top: 20px; font-size: 13px; color: #475569; }
+    input { height: 40px; border: 1px solid #cbd5e1; border-radius: 12px; padding: 0 12px; font-size: 14px; }
+    button { margin-top: 16px; width: 100%; height: 40px; border: 0; border-radius: 12px; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
+    .message { margin: 14px 0 0; color: ${status >= 400 ? '#e11d48' : '#2563eb'}; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>访问密码</h1>
+    <p>这是 WorkKnowlage 临时公网分享。请输入分享者提供的访问密码后继续阅读。</p>
+    ${messageHtml}
+    <form method="post" action="${escapeHtml(action)}">
+      <label>
+        访问密码
+        <input type="password" name="password" autocomplete="current-password" autofocus />
+      </label>
+      <button type="submit">进入分享页</button>
+    </form>
+  </main>
+</body>
+</html>`;
 }
 
 function getContentType(fileName, explicitMimeType) {
@@ -144,14 +263,39 @@ function resolveVendorAssetPath(rootDir, requestPath, prefix) {
   return filePath;
 }
 
-function startShareServer({ documentsRepo, shareRepository, uploadStorage, userDataDir, networkInterfaces = os.networkInterfaces }) {
+function startShareServer({ documentsRepo, shareRepository, spreadsheetsRepo = null, uploadStorage, userDataDir, networkInterfaces = os.networkInterfaces }) {
   const getPublicOrigin = () => buildShareOrigin(resolveLanShareHost(networkInterfaces), getShareServerPort(server));
-  const server = http.createServer((request, response) => {
-    const requestUrl = new URL(request.url || '/', 'http://127.0.0.1');
-    const pathname = decodeURIComponent(requestUrl.pathname || '/');
+  const publicShareSessions = new Map();
+  const hasPublicShareSession = (publicToken, request) => {
+    const cookieName = getPublicShareSessionCookieName(publicToken);
+    const sessionValue = parseCookieHeader(request.headers.cookie)[cookieName];
+    return Boolean(sessionValue && publicShareSessions.get(publicToken)?.has(sessionValue));
+  };
+  const createPublicShareSession = (publicToken) => {
+    const sessionValue = crypto.randomBytes(24).toString('base64url');
+    const sessions = publicShareSessions.get(publicToken) || new Set();
+    sessions.add(sessionValue);
+    publicShareSessions.set(publicToken, sessions);
+    return sessionValue;
+  };
 
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
+  const server = http.createServer(async (request, response) => {
+    try {
+      const requestUrl = new URL(request.url || '/', 'http://127.0.0.1');
+      const pathname = safeDecodeURIComponent(requestUrl.pathname || '/');
+
+    if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'POST') {
       sendText(response, 405, 'Method Not Allowed', 'text/plain; charset=utf-8', request.method || 'GET');
+      return;
+    }
+
+    if (request.method === 'POST' && !/^\/public\/share\/[^/]+\/auth$/.test(pathname)) {
+      sendText(response, 405, 'Method Not Allowed', 'text/plain; charset=utf-8', request.method || 'GET');
+      return;
+    }
+
+    if (isPublicTunnelHost(request.headers.host) && !isAllowedPublicTunnelPath(pathname)) {
+      sendText(response, 404, 'Not Found', 'text/plain; charset=utf-8', request.method || 'GET');
       return;
     }
 
@@ -205,6 +349,112 @@ function startShareServer({ documentsRepo, shareRepository, uploadStorage, userD
       return;
     }
 
+    if (pathname.startsWith('/public/share/')) {
+      const parts = pathname.replace(/^\/public\/share\//, '').split('/');
+      const publicToken = parts[0];
+      const isAuthRequest = parts[1] === 'auth';
+      const isPublicUploadRequest = parts[1] === 'uploads';
+      const share = shareRepository.getPublicShareByToken?.(publicToken);
+      if (!share || !share.publicEnabled) {
+        sendText(response, 404, 'Share not found', 'text/plain; charset=utf-8', request.method || 'GET');
+        return;
+      }
+
+      if (isAuthRequest) {
+        if (request.method !== 'POST') {
+          sendText(response, 405, 'Method Not Allowed', 'text/plain; charset=utf-8', request.method || 'GET');
+          return;
+        }
+
+        let body = '';
+        try {
+          body = await readRequestBody(request);
+        } catch {
+          sendText(response, 413, 'Request body is too large', 'text/plain; charset=utf-8', request.method || 'GET');
+          return;
+        }
+
+        const params = new URLSearchParams(body);
+        const password = params.get('password') || '';
+        if (!shareRepository.verifyPublicSharePassword?.(publicToken, password)) {
+          sendText(
+            response,
+            401,
+            renderPublicSharePasswordPage({
+              action: `/public/share/${encodeURIComponent(publicToken)}/auth`,
+              message: '访问密码不正确',
+              status: 401,
+            }),
+            'text/html; charset=utf-8',
+            request.method || 'GET',
+          );
+          return;
+        }
+
+        const sessionValue = createPublicShareSession(publicToken);
+        sendRedirect(response, `/public/share/${encodeURIComponent(publicToken)}`, {
+          'Set-Cookie': `${getPublicShareSessionCookieName(publicToken)}=${encodeURIComponent(sessionValue)}; HttpOnly; SameSite=Lax; Path=/public/share/${encodeURIComponent(publicToken)}`,
+        });
+        return;
+      }
+
+      if (!hasPublicShareSession(publicToken, request)) {
+        sendText(
+          response,
+          200,
+          renderPublicSharePasswordPage({
+            action: `/public/share/${encodeURIComponent(publicToken)}/auth`,
+          }),
+          'text/html; charset=utf-8',
+          request.method || 'GET',
+        );
+        return;
+      }
+
+      if (isPublicUploadRequest) {
+        const documentId = parts[2];
+        const fileName = parts[3];
+        if (!documentId || !fileName || documentId !== share.documentId) {
+          sendText(response, 404, 'Not Found', 'text/plain; charset=utf-8', request.method || 'GET');
+          return;
+        }
+
+        const filePath = uploadStorage.resolveUploadPath([documentId, fileName]);
+        if (!filePath || !fs.existsSync(filePath)) {
+          sendText(response, 404, 'Not Found', 'text/plain; charset=utf-8', request.method || 'GET');
+          return;
+        }
+
+        const contentType = getContentType(fileName, null);
+        response.writeHead(200, {
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        });
+        if (request.method === 'HEAD') {
+          response.end();
+          return;
+        }
+
+        fs.createReadStream(filePath).pipe(response);
+        return;
+      }
+
+      const document = documentsRepo.getDocumentById(share.documentId);
+      if (!document) {
+        sendText(response, 404, 'Document not found', 'text/plain; charset=utf-8', request.method || 'GET');
+        return;
+      }
+
+      const spreadsheetWorkbookJson = document.kind === 'spreadsheet'
+        ? spreadsheetsRepo?.getWorkbookByDocumentId?.(document.id)?.workbookJson ?? ''
+        : '';
+      const origin = getRequestOrigin(request, getPublicOrigin());
+      const assetOrigin = buildPublicShareAssetOrigin(origin, publicToken);
+      const html = buildShareHtml({ document, share, origin: assetOrigin, spreadsheetWorkbookJson });
+      sendText(response, 200, html, 'text/html; charset=utf-8', request.method || 'GET');
+      return;
+    }
+
     if (pathname.startsWith('/share/')) {
       const token = pathname.replace(/^\/share\//, '').split('/')[0];
       const share = shareRepository.getShareByToken(token);
@@ -220,7 +470,10 @@ function startShareServer({ documentsRepo, shareRepository, uploadStorage, userD
       }
 
       const origin = getRequestOrigin(request, getPublicOrigin());
-      const html = buildShareHtml({ document, share, origin });
+      const spreadsheetWorkbookJson = document.kind === 'spreadsheet'
+        ? spreadsheetsRepo?.getSpreadsheetWorkbook?.(document.id)?.workbookJson ?? ''
+        : '';
+      const html = buildShareHtml({ document, share, origin, spreadsheetWorkbookJson });
       sendText(response, 200, html, 'text/html; charset=utf-8', request.method || 'GET');
       return;
     }
@@ -240,16 +493,22 @@ function startShareServer({ documentsRepo, shareRepository, uploadStorage, userD
       }
 
       const origin = getRequestOrigin(request, getPublicOrigin());
+      const spreadsheetWorkbookJson = document.kind === 'spreadsheet'
+        ? spreadsheetsRepo?.getSpreadsheetWorkbook?.(document.id)?.workbookJson ?? ''
+        : '';
       sendJson(response, 200, {
         share,
         document,
         publicUrl: `${origin}/share/${share.token}`,
-        html: buildShareHtml({ document, share, origin }),
+        html: buildShareHtml({ document, share, origin, spreadsheetWorkbookJson }),
       }, request.method || 'GET');
       return;
     }
 
     sendText(response, 404, 'Not Found', 'text/plain; charset=utf-8', request.method || 'GET');
+    } catch (_err) {
+      sendText(response, 500, 'Internal Server Error', 'text/plain; charset=utf-8', 'GET');
+    }
   });
 
   const listen = () =>

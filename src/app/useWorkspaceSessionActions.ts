@@ -52,7 +52,7 @@ export function useWorkspaceSessionActions({
     [reloadWorkspaceState, setActiveQuickNoteDate, setWorkspaceState],
   );
 
-  const selectCollectionView = useCallback((view: 'all-notes' | 'favorites' | 'trash') => {
+  const selectCollectionView = useCallback((view: 'all-notes' | 'shared-links' | 'favorites' | 'trash') => {
     setActiveQuickNoteDate(null);
     setWorkspaceState((prev) => (prev ? { ...prev, activeCollectionView: view } : prev));
   }, [setActiveQuickNoteDate, setWorkspaceState]);

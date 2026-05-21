@@ -46,6 +46,10 @@ Agent workflows 产生的临时实现草稿可以写入 `.scratch/`。但 PRD、
 
 本地分享链接不能只把 URL 从 `127.0.0.1` 改成内网 IP；share server 也必须监听非 loopback 地址，例如 `0.0.0.0`，否则同一局域网内的其他设备仍然无法访问。
 
+2026-05-20: Cloudflare quick tunnel 输出 trycloudflare URL 不代表 tunnel 已可访问。`cloudflared` 可能先打印 URL，再注册 connector；如果 WorkKnowlage 立刻复制 URL，浏览器可能看到 Cloudflare 1033。公网分享必须等到 cloudflared 日志出现连接注册信号（例如 `Registered tunnel connection`）后再把链接暴露给用户；如果注册前退出或超时，应把最近 cloudflared 日志带到错误信息里，而不是返回死链接。
+
+补充：如果日志里出现 `Initial protocol quic` 后 `Failed to dial a quic connection ... timeout: no recent network activity`，说明当前网络/VPN/代理环境可能阻断 UDP/QUIC。WorkKnowlage 的临时公网分享应默认用 `cloudflared --protocol http2`，走 TCP/TLS，真实 smoke 需要验证公网 URL 能访问本地 `/healthz`，不能只看 tunnel URL 是否生成。
+
 ## Word Export Color Tokens
 
 BlockNote / editor content may store colors as semantic tokens such as `red`, `blue`, `green`, and `yellow`. DOCX export must not pass these values directly to `docx`; it requires 6 digit hex strings without `#`.
@@ -120,6 +124,20 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 2026-05-18: SQLite `datetime('now')` returns UTC strings without a timezone suffix. When showing document timestamps, treat `YYYY-MM-DD HH:mm:ss` as UTC storage and format it into the user's local timezone before displaying; otherwise WorkKnowlage appears eight hours behind on China Standard Time systems.
 
 2026-05-19: WorkKnowlage 表格文档不是普通文稿的另一种内容块。表格态应优先给在线 Spreadsheet 画布让出空间，避免复用右侧“文稿概览 / Wiki / 文稿脉络”信息栏。集成 Univer 时必须显式注册当前语言包，并为表格 preset 提供可打包的 module worker；否则会出现空白容器或运行时 `[LocaleService]: Locale not initialized`。
+
+2026-05-19: WorkKnowlage 打包后的应用必须覆盖旧库启动路径。`schema.cjs` 如果新增依赖新列的索引、触发器或查询结构，`electron/db/index.cjs` 必须先执行旧库 migration，再执行 `SCHEMA_SQL`；否则 DMG 首次打开旧数据库时可能因为索引引用缺失列而启动失败。此类修复要用 Electron smoke script 覆盖真实 ABI，不要直接在普通 Node 进程里打开 `better-sqlite3`。
+
+2026-05-20: 外部 Markdown 文件不是知识库内部文档的弱选中态。用户确认的产品形态是：Finder / 默认打开进入 WorkKnowlage 的独立外部文件窗口；继续使用 WorkKnowlage 块编辑器；目录保留并放到最左侧；右侧 Wiki / 属性栏不显示；顶部展示自动保存、修改时间和字数；“在 Finder 中显示”和“导入知识库”放在右上角。外部文件默认自动保存回原 `.md` / `.markdown` 路径，只有用户主动导入时才创建知识库文档。
+
+2026-05-20: 外部 Markdown 文件窗口的视觉样式也必须继承 WorkKnowlage 主应用风格。不要把外部文件做成裸白背景、直角侧栏或普通网页工具条；应复用主 shell 的渐变背景、圆角玻璃侧栏、CenterPane 文稿面板、统一目录行和编辑器排版。外部文件是 WorkKnowlage 的一个专用文档窗口，不是一个低配 Markdown 编辑器。
+
+2026-05-21: Cloudflare quick tunnel 会暴露整个本地 share server，不只是某个生成出来的公网分享 URL。实现临时公网分享时，不能只把 HTML 里的附件链接改成密码保护路径；server 也必须根据 tunnel Host 阻断裸 `/uploads/*` 和局域 `/share/*` 路径，并把公网分享附件放到 `/public/share/:token/uploads/*` 后面复用密码 session。否则只要知道资源路径，就可能绕过公网分享密码门。
+
+2026-05-21: 外部 Markdown 文件自动保存虽然允许 BlockNote 规范化正文，但不能吞掉文件级元数据。保存边界至少要保留 YAML frontmatter，并用同目录临时文件再 rename 替换原文件，避免 lossy round-trip 或半截写入破坏用户原始 `.md` 文件。相关模块：`src/features/external-file/ExternalFileApp.tsx`、`electron/externalFiles.cjs`。
+
+2026-05-21: WorkKnowlage Electron 包体积优化时，先看 `app.asar` 是否重复塞入 renderer-only dependencies。Vite 已把 React、Univer、Mermaid、Lucide、JSZip 等前端库编进 `dist`，这些库应放在 `devDependencies`，production `dependencies` 只保留主进程运行时需要的 `better-sqlite3`。同时用 `electronLanguages` 保留 `en` / `zh_CN` / `zh_TW`，并从 packaged files 排除 `better-sqlite3/deps` 和 `better-sqlite3/src`。这次实测 `app.asar` 从约 310M 降到 24M，DMG 从约 195M 降到 128M。
+
+2026-05-21: WorkKnowlage 导出链路要按目标格式处理字体和图表。DOCX 中文字体不要使用 macOS-only 的 `PingFang SC` 作为 eastAsia 字体，应写入更稳定的 `Microsoft YaHei` 并在正文 TextRun 上显式设置，避免 Word/WPS fallback 成异常字体。PDF 导出 Mermaid 时，应在 renderer 的 export 边界动态加载 Mermaid、预渲染为内联 SVG，再交给 Electron `printToPDF`；不要依赖 data URL 打印窗口再加载相对路径脚本。相关模块：`src/features/export/docxExportUtils.ts`、`src/features/export/exportUtils.ts`、`src/app/useDocumentExport.ts`。
 
 ## How to Add Lessons
 

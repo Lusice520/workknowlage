@@ -7,7 +7,7 @@ import type {
   WorkspaceCollectionView,
 } from '../../shared/types/workspace';
 
-type CollectionView = Exclude<WorkspaceCollectionView, 'tree' | 'trash'>;
+type CollectionView = Exclude<WorkspaceCollectionView, 'tree' | 'shared-links' | 'trash'>;
 
 interface CollectionCenterPaneProps {
   view: CollectionView;

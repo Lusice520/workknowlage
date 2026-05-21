@@ -5,6 +5,7 @@ type ExportBlock = Record<string, any>;
 
 interface UseDocumentExportOptions {
   activeDocumentId: string | null;
+  activeDocumentKind?: 'note' | 'spreadsheet' | null;
   activeDocumentTitle: string | null;
   activeQuickNoteDate: string | null;
   getCurrentContentJson: () => string;
@@ -14,6 +15,7 @@ interface UseDocumentExportOptions {
 export interface DocumentExportState {
   exportMarkdown: () => Promise<void>;
   exportPdf: () => Promise<void>;
+  exportSpreadsheet: () => Promise<void>;
   exportWord: () => Promise<void>;
   exportBusy: boolean;
   exportStatusText: string;
@@ -31,6 +33,7 @@ interface ExportUtilitiesModule {
   toMarkdownFromBlocks?: (blocks: ExportBlock[]) => string;
   toPrintHtmlFromBlocks?: (blocks: ExportBlock[]) => string;
   toPrintHtmlDocumentFromBlocks?: (blocks: ExportBlock[], title?: string) => string;
+  toPrintHtmlDocumentFromBlocksWithMermaid?: (blocks: ExportBlock[], title?: string) => Promise<string>;
 }
 
 interface DocxExportUtilitiesModule {
@@ -38,8 +41,13 @@ interface DocxExportUtilitiesModule {
   buildDocxBlobFromBlocks?: (blocks: ExportBlock[], options?: { title?: string }) => Promise<Uint8Array | Blob | ArrayBuffer | number[]>;
 }
 
+interface SpreadsheetExportUtilitiesModule {
+  buildXlsxBytesFromWorkbookJson?: (workbookJson: string) => Promise<Uint8Array | Blob | ArrayBuffer | number[]>;
+}
+
 let exportUtilitiesPromise: Promise<ExportUtilitiesModule | null> | null = null;
 let docxUtilitiesPromise: Promise<DocxExportUtilitiesModule | null> | null = null;
+let spreadsheetUtilitiesPromise: Promise<SpreadsheetExportUtilitiesModule | null> | null = null;
 
 const normalizeFileName = (rawTitle: string, extension: string) => {
   const base = String(rawTitle || '文档')
@@ -354,8 +362,19 @@ const loadDocxUtilities = async () => {
   return docxUtilitiesPromise;
 };
 
+const loadSpreadsheetUtilities = async () => {
+  if (!spreadsheetUtilitiesPromise) {
+    spreadsheetUtilitiesPromise = import('../features/export/spreadsheetExportUtils')
+      .then((module) => module as SpreadsheetExportUtilitiesModule)
+      .catch(() => null);
+  }
+
+  return spreadsheetUtilitiesPromise;
+};
+
 export function useDocumentExport({
   activeDocumentId,
+  activeDocumentKind = 'note',
   activeDocumentTitle,
   activeQuickNoteDate,
   getCurrentContentJson,
@@ -402,7 +421,9 @@ export function useDocumentExport({
       const exportUtilities = await loadExportUtilities();
       const blocks = exportUtilities?.parseBlocks?.(contentJson) ?? parseBlocks(contentJson);
       const markdown = exportUtilities?.toMarkdownFromBlocks?.(blocks) || renderMarkdownFromBlocks(blocks);
-      const html = exportUtilities?.toPrintHtmlDocumentFromBlocks?.(blocks, title) || renderHtmlFromBlocks(blocks, title);
+      const html = format === 'pdf' && exportUtilities?.toPrintHtmlDocumentFromBlocksWithMermaid
+        ? await exportUtilities.toPrintHtmlDocumentFromBlocksWithMermaid(blocks, title)
+        : exportUtilities?.toPrintHtmlDocumentFromBlocks?.(blocks, title) || renderHtmlFromBlocks(blocks, title);
 
       const result = await exportAction({
         blocks,
@@ -429,6 +450,10 @@ export function useDocumentExport({
   };
 
   const exportMarkdown = async () => {
+    if (activeDocumentKind === 'spreadsheet') {
+      return;
+    }
+
     await runExport('markdown', async ({ fileName, markdown }) => {
       const exportApi = getWorkKnowlageApi().exports;
       if (!exportApi) {
@@ -440,6 +465,10 @@ export function useDocumentExport({
   };
 
   const exportPdf = async () => {
+    if (activeDocumentKind === 'spreadsheet') {
+      return;
+    }
+
     await runExport('pdf', async ({ fileName, html }) => {
       const exportApi = getWorkKnowlageApi().exports;
       if (!exportApi) {
@@ -451,6 +480,10 @@ export function useDocumentExport({
   };
 
   const exportWord = async () => {
+    if (activeDocumentKind === 'spreadsheet') {
+      return;
+    }
+
     await runExport('word', async ({ fileName, blocks, title }) => {
       const exportApi = getWorkKnowlageApi().exports;
       if (!exportApi) {
@@ -483,9 +516,51 @@ export function useDocumentExport({
     });
   };
 
+  const exportSpreadsheet = async () => {
+    if (!activeDocumentId || activeQuickNoteDate || activeDocumentKind !== 'spreadsheet') {
+      return;
+    }
+
+    const title = String(activeDocumentTitle || '表格').trim() || '表格';
+    const workbookJson = getCurrentContentJsonRef.current?.() ?? '{}';
+    const fileName = normalizeFileName(title, 'xlsx');
+    const exportApi = getWorkKnowlageApi().exports;
+    const spreadsheetApi = getWorkKnowlageApi().spreadsheets;
+
+    setExportBusy(true);
+    setExportStatusText(`正在导出 ${title}`);
+
+    try {
+      if (!exportApi || !spreadsheetApi) {
+        setExportStatusText('当前环境不支持 Excel 导出');
+        return;
+      }
+
+      await spreadsheetApi.update(activeDocumentId, workbookJson);
+      const spreadsheetUtilities = await loadSpreadsheetUtilities();
+      if (!spreadsheetUtilities?.buildXlsxBytesFromWorkbookJson) {
+        setExportStatusText('Excel 导出模块加载失败');
+        return;
+      }
+
+      const bytes = await normalizeBytes(await spreadsheetUtilities.buildXlsxBytesFromWorkbookJson(workbookJson));
+      const result = await exportApi.saveBinary(fileName, bytes);
+      setExportStatusText(result?.success === false
+        ? result.message || '已取消导出'
+        : result?.message || `${title} 已导出`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      setExportStatusText(`Excel 导出失败：${message}`);
+      console.error('[App] Failed to export spreadsheet document:', error);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   return {
     exportMarkdown,
     exportPdf,
+    exportSpreadsheet,
     exportWord,
     exportBusy,
     exportStatusText,

@@ -24,8 +24,14 @@ const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordproces
 const DOCX_FONT_FAMILY = {
   ascii: 'Aptos',
   hAnsi: 'Aptos',
-  eastAsia: 'PingFang SC',
+  eastAsia: 'Microsoft YaHei',
   cs: 'Aptos',
+};
+const DOCX_CODE_FONT_FAMILY = {
+  ascii: 'Consolas',
+  hAnsi: 'Consolas',
+  eastAsia: 'Microsoft YaHei',
+  cs: 'Consolas',
 };
 
 const DOCX_COLORS = {
@@ -318,7 +324,7 @@ const textRunFromInlineNode = (node: any, extra: Record<string, unknown> = {}) =
   }
 
   if (typeof node === 'string') {
-    return new TextRun({ text: node, ...extra });
+    return new TextRun({ text: node, font: DOCX_FONT_FAMILY, ...extra });
   }
 
   if (node.type === 'text') {
@@ -327,6 +333,7 @@ const textRunFromInlineNode = (node: any, extra: Record<string, unknown> = {}) =
       || (extra.color as string | undefined);
     return new TextRun({
       text: String(node.text || ''),
+      font: DOCX_FONT_FAMILY,
       bold: Boolean(styles.bold),
       italics: Boolean(styles.italic),
       underline: styles.underline ? {} : undefined,
@@ -340,6 +347,7 @@ const textRunFromInlineNode = (node: any, extra: Record<string, unknown> = {}) =
     const title = String(node?.props?.title || '').trim() || '未命名文档';
     return new TextRun({
       text: `@${title}`,
+      font: DOCX_FONT_FAMILY,
       bold: true,
       color: DOCX_COLORS.hyperlink,
       ...extra,
@@ -347,7 +355,7 @@ const textRunFromInlineNode = (node: any, extra: Record<string, unknown> = {}) =
   }
 
   if (node.type === 'hardBreak') {
-    return new TextRun({ break: 1 });
+    return new TextRun({ break: 1, font: DOCX_FONT_FAMILY });
   }
 
   return null;
@@ -644,6 +652,7 @@ const buildDocxChildrenFromBlocks = async (
         children: [
           new TextRun({
             text: `${resolveAlertIcon(block?.props?.type)} `,
+            font: DOCX_FONT_FAMILY,
             bold: true,
             color: DOCX_COLORS.heading,
           }),
@@ -688,7 +697,7 @@ const buildDocxChildrenFromBlocks = async (
             }));
             if (name) {
               output.push(new Paragraph({
-                children: [new TextRun({ text: name, italics: true, color: DOCX_COLORS.muted })],
+                children: [new TextRun({ text: name, font: DOCX_FONT_FAMILY, italics: true, color: DOCX_COLORS.muted })],
                 spacing: withAutoLineSpacing({ before: 0, after: 180, line: 300 }),
                 alignment: AlignmentType.CENTER,
               }));
@@ -706,6 +715,7 @@ const buildDocxChildrenFromBlocks = async (
               children: [
                 new TextRun({
                   text: name || url,
+                  font: DOCX_FONT_FAMILY,
                   color: DOCX_COLORS.hyperlink,
                   underline: {},
                 }),
@@ -741,7 +751,7 @@ const buildDocxChildrenFromBlocks = async (
             }));
             if (caption) {
               output.push(new Paragraph({
-                children: [new TextRun({ text: caption, italics: true, color: DOCX_COLORS.muted })],
+                children: [new TextRun({ text: caption, font: DOCX_FONT_FAMILY, italics: true, color: DOCX_COLORS.muted })],
                 spacing: withAutoLineSpacing({ before: 0, after: 180, line: 300 }),
                 alignment: AlignmentType.CENTER,
               }));
@@ -798,7 +808,7 @@ const buildDocxChildrenFromBlocks = async (
       currentListReference = null;
       currentListInstance = null;
       output.push(new Paragraph({
-        children: [new TextRun({ text: '―', color: DOCX_COLORS.border })],
+        children: [new TextRun({ text: '―', font: DOCX_FONT_FAMILY, color: DOCX_COLORS.border })],
         alignment: AlignmentType.CENTER,
         spacing: withAutoLineSpacing({ before: 100, after: 100, line: 240 }),
       }));
@@ -808,7 +818,7 @@ const buildDocxChildrenFromBlocks = async (
       output.push(new Paragraph({
         children: [new TextRun({
           text: typeof block?.content === 'string' ? block.content : extractInlineText(block?.content),
-          font: 'Consolas',
+          font: DOCX_CODE_FONT_FAMILY,
           color: DOCX_COLORS.heading,
         })],
         spacing: withAutoLineSpacing({ before: 60, after: 100, line: 300 }),

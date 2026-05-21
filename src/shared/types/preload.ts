@@ -29,9 +29,20 @@ export interface DocumentShareRecord {
   documentId: string;
   token: string;
   enabled: boolean;
+  publicToken?: string;
+  publicEnabled?: boolean;
+  publicExpiresAt?: string | null;
+  publicPassword?: string;
   createdAt: string;
   updatedAt: string;
+  localUrl?: string;
   publicUrl?: string;
+}
+
+export interface WorkspaceShareRecord extends DocumentShareRecord {
+  documentTitle: string;
+  documentKind?: DocumentKind;
+  folderId?: string | null;
 }
 
 export interface WorkKnowlageStorageInfo {
@@ -59,6 +70,20 @@ export interface ExportActionResult {
   success: boolean;
   message: string;
   path?: string;
+}
+
+export interface ExternalMarkdownFileRecord {
+  filePath: string;
+  title: string;
+  markdown: string;
+  updatedAt: string;
+  updatedAtLabel: string;
+}
+
+export interface ExternalMarkdownImportResult {
+  success: boolean;
+  message: string;
+  document?: Partial<DocumentRecord> | null;
 }
 
 export interface SpreadsheetWorkbookRecord {
@@ -187,6 +212,16 @@ export interface WorkKnowlageDesktopApi {
     savePdfFromHtml: (fileName: string, html: string) => Promise<ExportActionResult>;
   };
 
+  externalFiles?: {
+    getInitial: () => Promise<ExternalMarkdownFileRecord>;
+    saveMarkdown: (markdown: string) => Promise<ExternalMarkdownFileRecord>;
+    revealInFinder: () => Promise<boolean>;
+    importToWorkspace: (payload: {
+      title: string;
+      contentJson: string;
+    }) => Promise<ExternalMarkdownImportResult>;
+  };
+
   assets: {
     upload: (documentId: string, assets: UploadAssetInput[]) => Promise<UploadedAssetRecord[]>;
   };
@@ -196,6 +231,10 @@ export interface WorkKnowlageDesktopApi {
     create: (documentId: string) => Promise<DocumentShareRecord | null>;
     regenerate: (documentId: string) => Promise<DocumentShareRecord | null>;
     disable: (documentId: string) => Promise<DocumentShareRecord | null>;
+    createPublic?: (documentId: string, options: { expiresAt?: string | null }) => Promise<DocumentShareRecord | null>;
+    disablePublic?: (documentId: string) => Promise<DocumentShareRecord | null>;
+    listForSpace?: (spaceId: string) => Promise<WorkspaceShareRecord[]>;
+    disableAllForSpace?: (spaceId: string) => Promise<number>;
     getPublicUrl: (token: string) => Promise<string>;
   };
 

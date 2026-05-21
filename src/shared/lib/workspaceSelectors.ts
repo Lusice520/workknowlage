@@ -11,6 +11,7 @@ import type {
 
 const DEFAULT_QUICK_LINKS: QuickLinkItem[] = [
   { id: 'all-notes', label: '所有笔记' },
+  { id: 'shared-links', label: '共享链接' },
   { id: 'favorites', label: '收藏夹' },
 ];
 

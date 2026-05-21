@@ -112,6 +112,8 @@ export const createMutableFallbackDesktopApi = ({
   quickNotes,
 }: MutableFallbackState): WorkKnowlageDesktopApi => {
   let mutableQuickNotes = quickNotes;
+  let externalMarkdown = '# 外部文件\n\n浏览器 Mock';
+  let externalUpdatedAt = new Date().toISOString();
   const resolveQuickNoteDate = (noteDateOrSpaceId: string, maybeNoteDate?: string) =>
     maybeNoteDate ?? noteDateOrSpaceId;
   const resolveQuickNoteMonthKey = (monthKeyOrSpaceId: string, maybeMonthKey?: string) =>
@@ -806,6 +808,59 @@ export const createMutableFallbackDesktopApi = ({
       saveBinary: async (fileName) => createFallbackExportResult(fileName),
       savePdfFromHtml: async (fileName) => createFallbackExportResult(fileName),
     },
+    externalFiles: {
+      getInitial: async () => ({
+        filePath: `${DEFAULT_BROWSER_STORAGE_PATH}/外部文件.md`,
+        title: '外部文件',
+        markdown: externalMarkdown,
+        updatedAt: externalUpdatedAt,
+        updatedAtLabel: new Date(externalUpdatedAt).toLocaleString('zh-CN'),
+      }),
+      saveMarkdown: async (markdown) => {
+        externalMarkdown = markdown;
+        externalUpdatedAt = new Date().toISOString();
+        return {
+          filePath: `${DEFAULT_BROWSER_STORAGE_PATH}/外部文件.md`,
+          title: '外部文件',
+          markdown: externalMarkdown,
+          updatedAt: externalUpdatedAt,
+          updatedAtLabel: new Date(externalUpdatedAt).toLocaleString('zh-CN'),
+        };
+      },
+      revealInFinder: async () => true,
+      importToWorkspace: async ({ title, contentJson }) => {
+        const space = seed.spaces[0];
+        if (!space) {
+          return {
+            success: false,
+            message: '没有可导入的知识库空间',
+          };
+        }
+
+        const now = new Date().toISOString();
+        const document = hydrateDocumentRecord({
+          id: `doc-${Date.now()}`,
+          spaceId: space.id,
+          folderId: null,
+          title,
+          contentJson,
+          updatedAt: now,
+          updatedAtLabel: new Date(now).toLocaleDateString('zh-CN'),
+          badgeLabel: '',
+          tags: [],
+          backlinks: [],
+          sections: [],
+          isFavorite: false,
+        });
+        seed.documents.push(document);
+        rebuildBacklinksForSpace(space.id);
+        return {
+          success: true,
+          message: '已导入知识库',
+          document,
+        };
+      },
+    },
     assets: {
       upload: async (documentId, assets) => {
         const uploaded = assets.map((asset) => ({
@@ -877,6 +932,28 @@ export const createMutableFallbackDesktopApi = ({
         shares[documentId] = nextShare;
         return nextShare;
       },
+      createPublic: async (documentId, options) => {
+        if (!getDocumentById(documentId)) {
+          return null;
+        }
+
+        const existing = shares[documentId];
+        const nextShare: DocumentShareRecord = {
+          id: existing?.id ?? `share-${Date.now()}`,
+          documentId,
+          token: existing?.token ?? createToken(),
+          enabled: existing?.enabled ?? false,
+          publicToken: createToken(),
+          publicEnabled: true,
+          publicPassword: Math.random().toString(36).slice(2, 14),
+          publicExpiresAt: options?.expiresAt ?? null,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        nextShare.publicUrl = `https://mock.trycloudflare.com/public/share/${nextShare.publicToken}`;
+        shares[documentId] = nextShare;
+        return nextShare;
+      },
       disable: async (documentId) => {
         if (!getDocumentById(documentId)) {
           return null;
@@ -893,6 +970,57 @@ export const createMutableFallbackDesktopApi = ({
           updatedAt: new Date().toISOString(),
         };
         return shares[documentId];
+      },
+      disablePublic: async (documentId) => {
+        if (!getDocumentById(documentId)) {
+          return null;
+        }
+
+        const currentShare = shares[documentId];
+        if (!currentShare) {
+          return null;
+        }
+
+        shares[documentId] = {
+          ...currentShare,
+          publicEnabled: false,
+          updatedAt: new Date().toISOString(),
+        };
+        return shares[documentId];
+      },
+      listForSpace: async (spaceId) => Object.values(shares)
+        .filter((share) => {
+          const document = getDocumentById(share.documentId);
+          return document?.spaceId === spaceId && Boolean(share.enabled || share.publicEnabled);
+        })
+        .map((share) => {
+          const document = getDocumentById(share.documentId);
+          return {
+            ...share,
+            documentTitle: document?.title ?? '未知文档',
+            documentKind: document?.kind ?? 'note',
+            folderId: document?.folderId ?? null,
+            localUrl: share.enabled ? `http://127.0.0.1:0/share/${share.token}` : '',
+            publicUrl: share.publicEnabled ? share.publicUrl : '',
+          };
+        }),
+      disableAllForSpace: async (spaceId) => {
+        let disabledCount = 0;
+        Object.values(shares).forEach((share) => {
+          const document = getDocumentById(share.documentId);
+          if (document?.spaceId !== spaceId || (!share.enabled && !share.publicEnabled)) {
+            return;
+          }
+
+          shares[share.documentId] = {
+            ...share,
+            enabled: false,
+            publicEnabled: false,
+            updatedAt: new Date().toISOString(),
+          };
+          disabledCount += 1;
+        });
+        return disabledCount;
       },
       getPublicUrl: async (token) => `http://127.0.0.1:0/share/${token}`,
     },

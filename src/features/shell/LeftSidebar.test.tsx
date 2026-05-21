@@ -458,15 +458,18 @@ test('keeps quick links and new-space controls visually compact', async () => {
 
   const sidebar = screen.getByTestId('left-sidebar');
   const allNotesButton = within(sidebar).getByRole('button', { name: '所有笔记' });
+  const sharedLinksButton = within(sidebar).getByRole('button', { name: '共享链接' });
   const favoritesButton = within(sidebar).getByRole('button', { name: '收藏夹' });
   const activeSpaceTitle = within(sidebar).getByText('Alpha Space');
   const folderLabel = within(sidebar).getByText('Alpha Folder');
   const documentLabel = within(sidebar).getByText('Alpha Doc');
 
   expect(allNotesButton.className).toContain('text-[12px]');
+  expect(sharedLinksButton.className).toContain('text-[12px]');
   expect(favoritesButton.className).toContain('text-[12px]');
   expect(within(allNotesButton).getByText('所有笔记').className).toContain('text-[12px]');
   expect(within(allNotesButton).getByText('所有笔记').className).toContain('font-medium');
+  expect(within(sharedLinksButton).getByText('共享链接').className).toContain('text-[12px]');
   expect(within(favoritesButton).getByText('收藏夹').className).toContain('text-[12px]');
   expect(activeSpaceTitle.className).toContain('text-[12px]');
   expect(folderLabel.className).toContain('text-[12px]');
@@ -808,6 +811,70 @@ test('supports creating spreadsheet documents from a document row create menu', 
 
   await waitFor(() => {
     expect(createDocument).toHaveBeenCalledWith('doc-alpha', { kind: 'spreadsheet' });
+    expect(within(sidebar).getByText('无标题表格')).toBeInTheDocument();
+  });
+});
+
+test('supports creating spreadsheet documents from the root create menu', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: [],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [],
+      documents: [],
+    },
+  };
+
+  const createDocument = vi.fn(async () => {});
+
+  await renderSidebarHarness({
+    initialState,
+    onCreateDocument: createDocument,
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+
+  await openSidebarMenu(sidebar, '根目录新建操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '新建 Excel' }));
+
+  await waitFor(() => {
+    expect(createDocument).toHaveBeenCalledWith(null, { kind: 'spreadsheet' });
+    expect(within(sidebar).getByText('无标题表格')).toBeInTheDocument();
+  });
+});
+
+test('supports creating spreadsheet documents from a folder row create menu', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder' },
+      ],
+      documents: [],
+    },
+  };
+
+  const createDocument = vi.fn(async () => {});
+
+  await renderSidebarHarness({
+    initialState,
+    onCreateDocument: createDocument,
+  });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+
+  await openSidebarMenu(sidebar, 'Alpha Folder 新建操作');
+  fireEvent.click(await screen.findByRole('menuitem', { name: '新建 Excel' }));
+
+  await waitFor(() => {
+    expect(createDocument).toHaveBeenCalledWith('folder-alpha', { kind: 'spreadsheet' });
     expect(within(sidebar).getByText('无标题表格')).toBeInTheDocument();
   });
 });

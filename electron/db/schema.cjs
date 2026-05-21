@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS document_shares (
   document_id   TEXT NOT NULL UNIQUE REFERENCES documents(id) ON DELETE CASCADE,
   token         TEXT NOT NULL UNIQUE,
   enabled       INTEGER NOT NULL DEFAULT 1,
+  public_token  TEXT UNIQUE,
+  public_enabled INTEGER NOT NULL DEFAULT 0,
+  public_password_hash TEXT,
+  public_password_salt TEXT,
+  public_expires_at TEXT,
+  public_created_at TEXT,
+  public_updated_at TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -134,6 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_space ON documents(space_id);
 CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(document_kind);
 CREATE INDEX IF NOT EXISTS idx_quick_notes_space_date ON quick_notes(space_id, note_date);
 CREATE INDEX IF NOT EXISTS idx_document_shares_token ON document_shares(token);
+CREATE INDEX IF NOT EXISTS idx_document_shares_public_token ON document_shares(public_token);
 CREATE INDEX IF NOT EXISTS idx_document_tags_doc ON document_tags(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_tags_tag ON document_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_backlinks_source ON backlinks(source_doc_id);

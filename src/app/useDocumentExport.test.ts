@@ -92,6 +92,13 @@ describe('useDocumentExport', () => {
           },
         ],
       },
+      {
+        id: 'mermaid-1',
+        type: 'codeBlock',
+        props: { language: 'mermaid' },
+        content: [{ type: 'text', text: 'graph TD\nA --> B', styles: {} }],
+        children: [],
+      },
     ]);
 
     const { result } = renderHook(() =>
@@ -129,12 +136,78 @@ describe('useDocumentExport', () => {
       expect.any(String),
       expect.stringContaining('class="kb-doc-mention">@关联文档</span>'),
     );
+    expect(savePdfFromHtml).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('kb-export-mermaid'),
+    );
     expect(saveBinary).toHaveBeenCalledTimes(1);
     const [wordFileName, wordBytes] = saveBinary.mock.calls[0] as [string, Uint8Array];
     expect(wordFileName).toContain('创意草案');
     expect(ArrayBuffer.isView(wordBytes)).toBe(true);
     expect(wordBytes[0]).toBe(0x50);
     expect(wordBytes[1]).toBe(0x4b);
+  });
+
+  test('exports spreadsheet documents as xlsx without writing workbook json into note content', async () => {
+    const saveDocumentContent = vi.fn().mockResolvedValue(undefined);
+    const updateWorkbook = vi.fn().mockResolvedValue({
+      documentId: 'sheet-1',
+      workbookJson: '{}',
+    });
+    const saveBinary = vi.fn().mockResolvedValue({
+      success: true,
+      message: 'Excel 已导出',
+    });
+    window.workKnowlage = {
+      ...createFallbackDesktopApi(),
+      spreadsheets: {
+        get: vi.fn(),
+        update: updateWorkbook,
+      },
+      exports: {
+        saveText: vi.fn(),
+        saveBinary,
+        savePdfFromHtml: vi.fn(),
+      },
+    } as any;
+
+    const workbookJson = JSON.stringify({
+      sheetOrder: ['sheet-1'],
+      sheets: {
+        'sheet-1': {
+          name: 'Sheet1',
+          cellData: {
+            0: {
+              0: { v: '预算' },
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useDocumentExport({
+        activeDocumentId: 'sheet-1',
+        activeDocumentKind: 'spreadsheet',
+        activeDocumentTitle: '预算表',
+        activeQuickNoteDate: null,
+        getCurrentContentJson: () => workbookJson,
+        onSaveDocumentContent: saveDocumentContent,
+      })
+    );
+
+    await act(async () => {
+      await result.current.exportSpreadsheet();
+    });
+
+    expect(saveDocumentContent).not.toHaveBeenCalled();
+    expect(updateWorkbook).toHaveBeenCalledWith('sheet-1', workbookJson);
+    expect(saveBinary).toHaveBeenCalledTimes(1);
+    const [fileName, bytes] = saveBinary.mock.calls[0] as [string, Uint8Array];
+    expect(fileName).toContain('预算表');
+    expect(fileName).toContain('.xlsx');
+    expect(bytes[0]).toBe(0x50);
+    expect(bytes[1]).toBe(0x4b);
   });
 });
 

@@ -92,6 +92,14 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     }),
   },
 
+  // ─── External Markdown files ─────────────────────────
+  externalFiles: {
+    getInitial: () => ipcRenderer.invoke('externalFiles:getInitial'),
+    saveMarkdown: (markdown) => ipcRenderer.invoke('externalFiles:saveMarkdown', markdown),
+    revealInFinder: () => ipcRenderer.invoke('externalFiles:revealInFinder'),
+    importToWorkspace: (payload) => ipcRenderer.invoke('externalFiles:importToWorkspace', payload),
+  },
+
   // ─── Local assets ─────────────────────────────────────
   assets: {
     upload: (documentId, assets) => ipcRenderer.invoke('assets:upload', documentId, assets),
@@ -103,6 +111,10 @@ contextBridge.exposeInMainWorld('workKnowlage', {
     create:      (documentId) => ipcRenderer.invoke('shares:create', documentId),
     regenerate:  (documentId) => ipcRenderer.invoke('shares:regenerate', documentId),
     disable:     (documentId) => ipcRenderer.invoke('shares:disable', documentId),
+    createPublic: (documentId, options) => ipcRenderer.invoke('shares:createPublic', documentId, options),
+    disablePublic: (documentId) => ipcRenderer.invoke('shares:disablePublic', documentId),
+    listForSpace: (spaceId) => ipcRenderer.invoke('shares:listForSpace', spaceId),
+    disableAllForSpace: (spaceId) => ipcRenderer.invoke('shares:disableAllForSpace', spaceId),
     getPublicUrl: (token)     => ipcRenderer.invoke('shares:getPublicUrl', token),
   },
 

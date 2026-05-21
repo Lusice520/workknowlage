@@ -18,6 +18,109 @@
   overflow: hidden;
 }
 
+.wk-spreadsheet-ribbon-picker {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  z-index: 30;
+}
+
+.wk-spreadsheet-ribbon-trigger {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: #242830;
+  padding: 0 14px 0 16px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+  cursor: pointer;
+}
+
+.wk-spreadsheet-ribbon-trigger:hover {
+  background: #171b22;
+}
+
+.wk-spreadsheet-ribbon-menu {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  width: 308px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.86);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 44px rgba(15, 23, 42, 0.16);
+}
+
+.wk-spreadsheet-ribbon-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wk-spreadsheet-ribbon-item:hover {
+  background: #f8fafc;
+}
+
+.wk-spreadsheet-ribbon-icon {
+  display: inline-flex;
+  height: 40px;
+  width: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 10px;
+  color: #64748b;
+}
+
+.wk-spreadsheet-ribbon-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wk-spreadsheet-ribbon-title {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.wk-spreadsheet-ribbon-description {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.wk-univer-ribbon-row {
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.wk-univer-ribbon-row [role='tablist'][aria-label='ribbon.menu'] {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.wk-univer-toolbar-row {
+  padding-left: 112px !important;
+}
+
 .wk-spreadsheet-state {
   position: absolute;
   inset: 0;

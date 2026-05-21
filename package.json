@@ -11,23 +11,18 @@
     "dev": "concurrently -k -n RENDERER,APP -c cyan,green \"npm:dev:renderer\" \"npm:dev:app\"",
     "dev:renderer": "vite --host 127.0.0.1 --port 5175 --strictPort",
     "dev:app": "wait-on tcp:5175 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5175 nodemon --watch electron --ext cjs,js,mjs --exec \"electron electron/main.cjs\"",
+    "cloudflared:prepare": "node scripts/prepare-cloudflared.mjs",
     "build": "vite build",
     "icon:build": "node scripts/generate-icon-assets.mjs",
-    "package:mac:dir": "npm run build && npm run icon:build && electron-builder --mac --dir",
-    "package:mac": "npm run build && npm run icon:build && electron-builder --mac dmg",
+    "package:mac:dir": "npm run cloudflared:prepare && npm run build && npm run icon:build && electron-builder --mac --dir",
+    "package:mac": "npm run cloudflared:prepare && npm run build && npm run icon:build && electron-builder --mac dmg",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
-    "@univerjs/preset-sheets-core": "^0.23.0",
-    "@univerjs/presets": "^0.23.0",
-    "better-sqlite3": "^12.8.0",
-    "lucide-react": "^0.575.0",
-    "mermaid": "^11.15.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
     "@blocknote/core": "0.48.0",
@@ -54,6 +49,8 @@
     "@types/node": "^24.5.2",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
+    "@univerjs/preset-sheets-core": "^0.23.0",
+    "@univerjs/presets": "^0.23.0",
     "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
@@ -61,10 +58,15 @@
     "electron": "^37.7.1",
     "electron-builder": "^26.8.1",
     "jsdom": "^26.1.0",
+    "jszip": "^3.10.1",
     "linkifyjs": "^4.3.2",
+    "lucide-react": "^0.575.0",
+    "mermaid": "^11.15.0",
     "nodemon": "^3.1.10",
     "prosemirror-docx": "^0.6.1",
     "prosemirror-tables": "^1.8.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
@@ -87,10 +89,38 @@
       "!docs/**/*",
       "!scripts/**/*",
       "!release/**/*",
+      "!node_modules/better-sqlite3/deps/**/*",
+      "!node_modules/better-sqlite3/src/**/*",
       "!build/icon/*.iconset{,/**}"
     ],
     "asarUnpack": [
       "**/*.node"
+    ],
+    "electronLanguages": [
+      "en",
+      "zh_CN",
+      "zh_TW"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown Document",
+        "description": "Markdown 文档",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "cloudflared"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",

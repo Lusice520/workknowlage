@@ -50,6 +50,37 @@ describe('docxExportUtils', () => {
     expect(bytes[1]).toBe(0x4b);
   });
 
+  test('writes a stable Chinese font into DOCX styles and text runs', async () => {
+    const bytes = await buildDocxBytesFromBlocks([
+      {
+        id: 'heading-1',
+        type: 'heading',
+        props: { level: 1 },
+        content: [{ type: 'text', text: '一、项目核心成员情况', styles: { bold: true } }],
+        children: [],
+      },
+      {
+        id: 'paragraph-1',
+        type: 'paragraph',
+        props: {},
+        content: [{ type: 'text', text: '公司现有产研中心人员 16 人。', styles: {} }],
+        children: [],
+      },
+    ], {
+      title: '字体导出',
+    });
+
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    const stylesXml = await zip.file('word/styles.xml')?.async('string');
+
+    expect(documentXml).toBeTruthy();
+    expect(stylesXml).toBeTruthy();
+    expect(stylesXml).toContain('w:eastAsia="Microsoft YaHei"');
+    expect(documentXml).toContain('w:eastAsia="Microsoft YaHei"');
+    expect(`${stylesXml}\n${documentXml}`).not.toContain('PingFang SC');
+  });
+
   test('normalizes editor color tokens before writing docx colors', async () => {
     const bytes = await buildDocxBytesFromBlocks([
       {

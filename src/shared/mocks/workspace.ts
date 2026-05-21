@@ -81,6 +81,7 @@ export const workspaceSeed: WorkspaceSeed = {
   ],
   quickLinks: [
     { id: 'all-notes', label: '所有笔记' },
+    { id: 'shared-links', label: '共享链接' },
     { id: 'favorites', label: '收藏夹' },
   ],
   folders: [

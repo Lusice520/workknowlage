@@ -3,8 +3,53 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
-const matchesEditorDependency = (id: string, patterns: string[]) =>
+const matchesEditorDependency = (id: string, patterns: readonly string[]) =>
   patterns.some((pattern) => id.includes(pattern));
+
+const spreadsheetVendorChunks = [
+  {
+    name: 'spreadsheet-univer-pro',
+    patterns: ['/node_modules/@univerjs-pro/'],
+  },
+  {
+    name: 'spreadsheet-univer-presets',
+    patterns: [
+      '/node_modules/@univerjs/preset-',
+      '/node_modules/@univerjs/presets/',
+    ],
+  },
+  {
+    name: 'spreadsheet-univer-ui',
+    patterns: [
+      '/node_modules/@univerjs/design/',
+      '/node_modules/@univerjs/docs',
+      '/node_modules/@univerjs/drawing',
+      '/node_modules/@univerjs/engine-render/',
+      '/node_modules/@univerjs/icons/',
+      '/node_modules/@univerjs/ui/',
+    ],
+  },
+  {
+    name: 'spreadsheet-univer-sheets',
+    patterns: [
+      '/node_modules/@univerjs/engine-formula/',
+      '/node_modules/@univerjs/sheets',
+    ],
+  },
+  {
+    name: 'spreadsheet-univer-core',
+    patterns: [
+      '/node_modules/@univerjs/core/',
+      '/node_modules/@univerjs/network/',
+      '/node_modules/@univerjs/protocol/',
+      '/node_modules/@univerjs/rpc',
+      '/node_modules/@univerjs/telemetry/',
+      '/node_modules/@univerjs/themes/',
+      '/node_modules/@wendellhu/redi/',
+      '/node_modules/rxjs/',
+    ],
+  },
+] as const;
 
 const noCollabAliases = [
   {
@@ -44,6 +89,12 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) {
             return undefined;
+          }
+
+          for (const chunk of spreadsheetVendorChunks) {
+            if (matchesEditorDependency(id, chunk.patterns)) {
+              return chunk.name;
+            }
           }
 
           if (matchesEditorDependency(id, [

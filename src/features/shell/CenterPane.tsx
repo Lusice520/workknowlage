@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCheck, ChevronDown, Download, Link2Off, LoaderCircle, RefreshCw, Share2, Star } from 'lucide-react';
+import { AlertTriangle, CheckCheck, ChevronDown, Copy, Download, Link2Off, LoaderCircle, RefreshCw, Share2, Star } from 'lucide-react';
 import type { EditorHostFocusDiagnostic, EditorHostShareInfo } from '../editor-host/EditorHost';
 import type { EditorSaveStatus } from '../editor-host/useEditorPersistence';
 import { buildMentionDocumentCandidates } from '../../shared/lib/documentPaths';
@@ -8,6 +8,7 @@ import { prefetchQuickNoteRecord } from '../../shared/lib/quickNoteRecords';
 import { CollectionCenterPane } from './CollectionCenterPane';
 import { CenterPaneLoading } from './CenterPaneLoading';
 import { sharedMenuDropdownClassName, sharedMenuItemClassName } from './sharedMenuStyles';
+import { SharedLinksCenterPane } from './SharedLinksCenterPane';
 import { TrashCenterPane } from './TrashCenterPane';
 import type {
   DocumentFocusTarget,
@@ -17,7 +18,7 @@ import type {
   Space,
   WorkspaceCollectionView,
 } from '../../shared/types/workspace';
-import type { SpreadsheetWorkbookRecord, TrashItemRecord } from '../../shared/types/preload';
+import type { DocumentShareRecord, SpreadsheetWorkbookRecord, TrashItemRecord, WorkspaceShareRecord } from '../../shared/types/preload';
 
 const LazyEditorHost = lazy(() =>
   import('../editor-host/EditorHost').then((module) => ({ default: module.EditorHost }))
@@ -66,6 +67,24 @@ const extractQuickNotePreviewText = (contentJson: string) => {
   }
 };
 
+type PublicShareExpiryPreset = '30m' | '1h' | 'today' | 'manual';
+
+const getTemporaryPublicShareExpiresAt = (preset: PublicShareExpiryPreset): string | null => {
+  if (preset === 'manual') {
+    return null;
+  }
+
+  const now = new Date();
+  if (preset === 'today') {
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+    return endOfDay.toISOString();
+  }
+
+  const durationMs = preset === '30m' ? 30 * 60 * 1000 : 60 * 60 * 1000;
+  return new Date(now.getTime() + durationMs).toISOString();
+};
+
 function CenterPaneBodyLoading({ description }: { description: string }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -105,10 +124,23 @@ interface CenterPaneProps {
   onDeleteTrashItem: (trashRootId: string) => Promise<void> | void;
   onEmptyTrash: () => Promise<void> | void;
   onShareDocument: (documentId: string, contentJson: string) => Promise<void> | void;
+  onSharePublicDocument: (
+    documentId: string,
+    contentJson: string,
+    options: { expiresAt?: string | null },
+  ) => Promise<void> | void;
   onRegenerateShareDocument: (documentId: string, contentJson: string) => Promise<void> | void;
   onDisableShareDocument: (documentId: string) => Promise<void> | void;
+  onDisablePublicShareDocument: (documentId: string) => Promise<void> | void;
+  onCopyLocalShareLink?: () => Promise<void> | void;
+  onCopyPublicShareLink?: () => Promise<void> | void;
+  onCopyPublicShareLinkWithPassword?: () => Promise<void> | void;
+  onListSharesForSpace?: (spaceId: string) => Promise<WorkspaceShareRecord[]>;
+  onResetPublicShare?: (documentId: string, options: { expiresAt?: string | null }) => Promise<DocumentShareRecord | null>;
+  onDisableAllSharesForSpace?: (spaceId: string) => Promise<number>;
   onExportMarkdown: () => Promise<void> | void;
   onExportPdf: () => Promise<void> | void;
+  onExportSpreadsheet: () => Promise<void> | void;
   onExportWord: () => Promise<void> | void;
   exportBusy: boolean;
   exportStatusText?: string | null;
@@ -117,6 +149,7 @@ interface CenterPaneProps {
   shareBusy?: boolean;
   shareLoading?: boolean;
   shareStatusText?: string | null;
+  shareCanCopyPublicPassword?: boolean;
 }
 
 export function CenterPane({
@@ -145,10 +178,19 @@ export function CenterPane({
   onDeleteTrashItem,
   onEmptyTrash,
   onShareDocument,
+  onSharePublicDocument,
   onRegenerateShareDocument,
   onDisableShareDocument,
+  onDisablePublicShareDocument,
+  onCopyLocalShareLink,
+  onCopyPublicShareLink,
+  onCopyPublicShareLinkWithPassword,
+  onListSharesForSpace,
+  onResetPublicShare,
+  onDisableAllSharesForSpace,
   onExportMarkdown,
   onExportPdf,
+  onExportSpreadsheet,
   onExportWord,
   exportBusy,
   exportStatusText,
@@ -157,6 +199,7 @@ export function CenterPane({
   shareBusy,
   shareLoading,
   shareStatusText,
+  shareCanCopyPublicPassword,
 }: CenterPaneProps) {
   const [saveStatus, setSaveStatus] = useState<EditorSaveStatus>('saved');
   const [quickNotePreviewText, setQuickNotePreviewText] = useState('');
@@ -247,7 +290,22 @@ export function CenterPane({
     );
   }
 
-  const collectionView = activeCollectionView === 'tree' || activeCollectionView === 'trash'
+  if (activeCollectionView === 'shared-links' && activeSpace) {
+    return (
+      <SharedLinksCenterPane
+        activeSpace={activeSpace}
+        folders={folders}
+        onOpenDocument={onOpenDocument}
+        onListSharesForSpace={onListSharesForSpace}
+        onDisableLocalShare={onDisableShareDocument}
+        onDisablePublicShare={onDisablePublicShareDocument}
+        onResetPublicShare={onResetPublicShare}
+        onDisableAllSharesForSpace={onDisableAllSharesForSpace}
+      />
+    );
+  }
+
+  const collectionView = activeCollectionView === 'tree' || activeCollectionView === 'trash' || activeCollectionView === 'shared-links'
     ? null
     : activeCollectionView;
 
@@ -279,13 +337,14 @@ export function CenterPane({
     );
   }
 
-  const hasShare = Boolean(String(shareInfo?.token || '').trim());
+  const hasLocalShare = Boolean(shareInfo?.enabled && String(shareInfo?.token || '').trim());
+  const hasPublicShare = Boolean(shareInfo?.publicEnabled && String(shareInfo?.publicToken || '').trim());
+  const hasAnyShare = hasLocalShare || hasPublicShare;
   const isSpreadsheetDocument = activeDocument.kind === 'spreadsheet';
   const isFavorite = Boolean(activeDocument.isFavorite);
   const favoriteLabel = `${isFavorite ? '取消收藏' : '收藏'}文档 ${activeDocument.title}`;
-  const shareLabel = shareLoading ? '检查分享' : (hasShare ? '分享已开启' : '分享');
-  const primaryShareActionLabel = hasShare ? '复制分享链接' : '开启并复制链接';
-  const disableShareLabel = '关闭分享';
+  const shareLabel = shareLoading ? '检查分享' : (hasAnyShare ? '分享已开启' : '分享');
+  const primaryShareActionLabel = hasLocalShare ? '复制局域分享链接' : '开启局域分享';
   const saveStatusMeta = {
     saved: {
       className: 'text-emerald-600 hover:text-emerald-700',
@@ -310,11 +369,19 @@ export function CenterPane({
   const SaveIcon = saveAction.icon;
   const shareMetaToneClass = shareStatusText?.includes('失败')
     ? 'bg-rose-50 text-rose-600'
+    : (shareBusy || shareLoading || shareStatusText?.includes('正在'))
+      ? 'bg-amber-50 text-amber-600'
     : (shareStatusText?.includes('复制') || shareStatusText?.includes('开启') || shareStatusText?.includes('更新'))
       ? 'bg-blue-50 text-blue-600'
       : 'bg-slate-100 text-slate-500';
 
   const getCurrentContentJson = () => contentSnapshotRef.current();
+  const shareTemporaryPublicDocument = async (preset: PublicShareExpiryPreset) => {
+    setShareMenuOpen(false);
+    await onSharePublicDocument(activeDocument.id, getCurrentContentJson(), {
+      expiresAt: getTemporaryPublicShareExpiresAt(preset),
+    });
+  };
 
   return (
     <section
@@ -354,97 +421,207 @@ export function CenterPane({
             <Star size={15} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
           {!isSpreadsheetDocument ? (
-            <>
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="分享"
-                  title={shareLabel}
-                  className={`flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60 ${
-                    hasShare ? 'text-blue-600' : 'text-[var(--wk-ink-soft)]'
-                  }`}
-                  onClick={() => {
-                    setExportMenuOpen(false);
-                    setShareMenuOpen((current) => !current);
-                  }}
-                  disabled={shareBusy || shareLoading}
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="分享"
+                title={shareLabel}
+                className={`flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                  hasAnyShare ? 'text-blue-600' : 'text-[var(--wk-ink-soft)]'
+                }`}
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  setShareMenuOpen((current) => !current);
+                }}
+                disabled={shareBusy || shareLoading}
+              >
+                {shareBusy || shareLoading ? <LoaderCircle size={15} className="animate-spin" /> : <Share2 size={15} />}
+                <span>分享</span>
+                <ChevronDown size={12} />
+              </button>
+              {shareMenuOpen ? (
+                <div
+                  role="menu"
+                  className={`absolute right-0 top-[calc(100%+8px)] z-20 !min-w-[220px] overflow-hidden ${sharedMenuDropdownClassName}`}
                 >
-                  <Share2 size={15} />
-                  <span>分享</span>
-                  <ChevronDown size={12} />
-                </button>
-                {shareMenuOpen ? (
-                  <div
-                    role="menu"
-                    className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-slate-400">局域分享</div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`${sharedMenuItemClassName} !gap-2`}
+                    onClick={async () => {
+                      setShareMenuOpen(false);
+                      if (hasLocalShare && onCopyLocalShareLink) {
+                        await onCopyLocalShareLink();
+                        return;
+                      }
+
+                      await onShareDocument(activeDocument.id, getCurrentContentJson());
+                    }}
+                    disabled={shareBusy || shareLoading}
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={`${sharedMenuItemClassName} !gap-2`}
-                      onClick={async () => {
-                        setShareMenuOpen(false);
-                        await onShareDocument(activeDocument.id, getCurrentContentJson());
-                      }}
-                      disabled={shareBusy || shareLoading}
-                    >
-                      <Share2 size={14} />
-                      <span>{primaryShareActionLabel}</span>
-                    </button>
-                    {hasShare ? (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={`${sharedMenuItemClassName} !gap-2`}
-                          onClick={async () => {
-                            setShareMenuOpen(false);
-                            await onRegenerateShareDocument(activeDocument.id, getCurrentContentJson());
-                          }}
-                          disabled={shareBusy || shareLoading}
-                        >
-                          <RefreshCw size={14} />
-                          <span>刷新分享地址</span>
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={`${sharedMenuItemClassName} !gap-2 !text-rose-600 hover:!text-rose-700`}
-                          onClick={async () => {
-                            setShareMenuOpen(false);
-                            await onDisableShareDocument(activeDocument.id);
-                          }}
-                          disabled={shareBusy || shareLoading}
-                        >
-                          <Link2Off size={14} />
-                          <span>{disableShareLabel}</span>
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="导出"
-                  title={exportStatusText || '导出文档'}
-                  className="flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium text-[var(--wk-ink-soft)] transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    setShareMenuOpen(false);
-                    setExportMenuOpen((current) => !current);
-                  }}
-                  disabled={exportBusy}
-                >
-                  {exportBusy ? <LoaderCircle size={15} className="animate-spin" /> : <Download size={15} />}
-                  <span>导出</span>
-                  <ChevronDown size={12} />
-                </button>
-                {exportMenuOpen ? (
-                  <div
-                    role="menu"
-                    className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
+                    <Share2 size={14} />
+                    <span>{primaryShareActionLabel}</span>
+                  </button>
+                  {hasLocalShare ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${sharedMenuItemClassName} !gap-2`}
+                        onClick={async () => {
+                          setShareMenuOpen(false);
+                          await onRegenerateShareDocument(activeDocument.id, getCurrentContentJson());
+                        }}
+                        disabled={shareBusy || shareLoading}
+                      >
+                        <RefreshCw size={14} />
+                        <span>刷新局域分享地址</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${sharedMenuItemClassName} !gap-2 !text-rose-600 hover:!text-rose-700`}
+                        onClick={async () => {
+                          setShareMenuOpen(false);
+                          await onDisableShareDocument(activeDocument.id);
+                        }}
+                        disabled={shareBusy || shareLoading}
+                      >
+                        <Link2Off size={14} />
+                        <span>关闭局域分享</span>
+                      </button>
+                    </>
+                  ) : null}
+                  <div className="my-1 h-px bg-slate-100" role="separator" />
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-slate-400">临时公网分享</div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`${sharedMenuItemClassName} !gap-2`}
+                    onClick={() => shareTemporaryPublicDocument('30m')}
+                    disabled={shareBusy || shareLoading}
                   >
+                    <Share2 size={14} />
+                    <span>临时公网分享 30 分钟</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`${sharedMenuItemClassName} !gap-2`}
+                    onClick={() => shareTemporaryPublicDocument('1h')}
+                    disabled={shareBusy || shareLoading}
+                  >
+                    <Share2 size={14} />
+                    <span>临时公网分享 1 小时</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`${sharedMenuItemClassName} !gap-2`}
+                    onClick={() => shareTemporaryPublicDocument('today')}
+                    disabled={shareBusy || shareLoading}
+                  >
+                    <Share2 size={14} />
+                    <span>临时公网分享 今天内</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`${sharedMenuItemClassName} !gap-2`}
+                    onClick={() => shareTemporaryPublicDocument('manual')}
+                    disabled={shareBusy || shareLoading}
+                  >
+                    <Share2 size={14} />
+                    <span>临时公网分享 手动关闭</span>
+                  </button>
+                  {hasPublicShare ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${sharedMenuItemClassName} !gap-2`}
+                        onClick={async () => {
+                          setShareMenuOpen(false);
+                          await (shareCanCopyPublicPassword
+                            ? onCopyPublicShareLinkWithPassword?.()
+                            : onCopyPublicShareLink?.());
+                        }}
+                        disabled={shareBusy || shareLoading}
+                      >
+                        <Copy size={14} />
+                        <span>{shareCanCopyPublicPassword ? '复制公网链接和密码' : '复制临时公网链接'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${sharedMenuItemClassName} !gap-2`}
+                        onClick={async () => {
+                          setShareMenuOpen(false);
+                          await onSharePublicDocument(activeDocument.id, getCurrentContentJson(), {
+                            expiresAt: shareInfo?.publicExpiresAt ?? null,
+                          });
+                        }}
+                        disabled={shareBusy || shareLoading}
+                      >
+                        <RefreshCw size={14} />
+                        <span>重置公网链接和密码</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${sharedMenuItemClassName} !gap-2 !text-rose-600 hover:!text-rose-700`}
+                        onClick={async () => {
+                          setShareMenuOpen(false);
+                          await onDisablePublicShareDocument(activeDocument.id);
+                        }}
+                        disabled={shareBusy || shareLoading}
+                      >
+                        <Link2Off size={14} />
+                        <span>关闭临时公网分享</span>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="导出"
+              title={exportStatusText || (isSpreadsheetDocument ? '导出 Excel' : '导出文档')}
+              className="flex items-center gap-1 rounded-[12px] border border-[rgba(255,255,255,0.82)] bg-white/84 px-2.5 py-1.5 text-[12px] font-medium text-[var(--wk-ink-soft)] transition hover:text-[var(--wk-ink)] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                setShareMenuOpen(false);
+                setExportMenuOpen((current) => !current);
+              }}
+              disabled={exportBusy}
+            >
+              {exportBusy ? <LoaderCircle size={15} className="animate-spin" /> : <Download size={15} />}
+              <span>导出</span>
+              <ChevronDown size={12} />
+            </button>
+            {exportMenuOpen ? (
+              <div
+                role="menu"
+                className={`absolute right-0 top-[calc(100%+8px)] z-20 overflow-hidden ${sharedMenuDropdownClassName}`}
+              >
+                {isSpreadsheetDocument ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={sharedMenuItemClassName}
+                    onClick={async () => {
+                      setExportMenuOpen(false);
+                      await onExportSpreadsheet();
+                    }}
+                    disabled={exportBusy}
+                  >
+                    导出 Excel
+                  </button>
+                ) : (
+                  <>
                     <button
                       type="button"
                       role="menuitem"
@@ -481,43 +658,58 @@ export function CenterPane({
                     >
                       导出 Word
                     </button>
-                  </div>
-                ) : null}
+                  </>
+                )}
               </div>
-            </>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </header>
 
-      <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4">
-        <div className="px-1">
-          <h1 className="text-[22px] font-semibold leading-[1.08] tracking-[-0.035em] text-[var(--wk-ink)]">
-            {activeDocument.title}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--wk-muted)]">
-            <span>{activeDocument.updatedAtLabel}</span>
-            {isSpreadsheetDocument ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
-                表格
-              </span>
-            ) : null}
-            {!isSpreadsheetDocument ? (
-              <>
-                <span>{activeDocument.wordCountLabel}</span>
-                <span className="h-1 w-1 rounded-full bg-[rgba(148,163,184,0.9)]" />
-                <span className="rounded-full bg-[rgba(59,130,246,0.08)] px-3 py-1 text-[11px] font-medium text-[var(--wk-accent)]">
-                  #{activeDocument.badgeLabel}
+      <div className={`flex min-h-0 flex-1 flex-col ${isSpreadsheetDocument ? 'mt-3 gap-3' : 'mt-5 gap-4'}`}>
+        <div
+          data-testid="document-title-area"
+          data-title-layout={isSpreadsheetDocument ? 'compact-spreadsheet' : 'note'}
+          className={isSpreadsheetDocument
+            ? 'flex shrink-0 items-end justify-between gap-4 px-1 py-0.5'
+            : 'px-1'}
+        >
+          <div className="min-w-0">
+            <h1 className={`font-semibold leading-[1.08] tracking-[-0.035em] text-[var(--wk-ink)] ${
+              isSpreadsheetDocument ? 'truncate text-[18px]' : 'text-[22px]'
+            }`}>
+              {activeDocument.title}
+            </h1>
+            <div className={`flex flex-wrap items-center gap-2.5 text-[12px] text-[var(--wk-muted)] ${
+              isSpreadsheetDocument ? 'mt-1.5' : 'mt-3'
+            }`}>
+              <span>{activeDocument.updatedAtLabel}</span>
+              {isSpreadsheetDocument ? (
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
+                  表格
                 </span>
-                <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${shareMetaToneClass}`}>
-                  {shareStatusText || '分享未开启'}
-                </span>
-                {exportStatusText ? (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
-                    {exportStatusText}
+              ) : null}
+              {!isSpreadsheetDocument ? (
+                <>
+                  <span>{activeDocument.wordCountLabel}</span>
+                  <span className="h-1 w-1 rounded-full bg-[rgba(148,163,184,0.9)]" />
+                  <span className="rounded-full bg-[rgba(59,130,246,0.08)] px-3 py-1 text-[11px] font-medium text-[var(--wk-accent)]">
+                    #{activeDocument.badgeLabel}
                   </span>
-                ) : null}
-              </>
-            ) : null}
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${shareMetaToneClass}`}>
+                    {shareBusy || shareLoading || shareStatusText?.includes('正在') ? (
+                      <LoaderCircle size={11} className="animate-spin" />
+                    ) : null}
+                    {shareStatusText || '分享未开启'}
+                  </span>
+                  {exportStatusText ? (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
+                      {exportStatusText}
+                    </span>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
 

@@ -221,6 +221,45 @@ function migrateBacklinkSourceBlockId(database) {
   database.exec('ALTER TABLE backlinks ADD COLUMN source_block_id TEXT');
 }
 
+function migrateDocumentSharePublicColumns(database) {
+  if (!tableExists(database, 'document_shares')) {
+    return;
+  }
+
+  const shareColumns = database.prepare('PRAGMA table_info(document_shares)').all();
+  const hasColumn = (name) => shareColumns.some((column) => column.name === name);
+  const statements = [];
+
+  if (!hasColumn('public_token')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_token TEXT');
+  }
+  if (!hasColumn('public_enabled')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_enabled INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn('public_password_hash')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_password_hash TEXT');
+  }
+  if (!hasColumn('public_password_salt')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_password_salt TEXT');
+  }
+  if (!hasColumn('public_expires_at')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_expires_at TEXT');
+  }
+  if (!hasColumn('public_created_at')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_created_at TEXT');
+  }
+  if (!hasColumn('public_updated_at')) {
+    statements.push('ALTER TABLE document_shares ADD COLUMN public_updated_at TEXT');
+  }
+
+  if (statements.length === 0) {
+    return;
+  }
+
+  console.log('[DB] Adding public share columns to document_shares table...');
+  statements.forEach((statement) => database.exec(statement));
+}
+
 function migrateLegacySectionContentJson(database) {
   if (!tableExists(database, 'documents')) {
     return;
@@ -285,13 +324,16 @@ function initDatabase() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // Create tables
-  db.exec(SCHEMA_SQL);
+  // Run migrations first so columns exist before SCHEMA_SQL creates indexes on them
   migrateDocumentsFolderIdNullable(db);
   migrateDocumentsFavoriteFlag(db);
   migrateDocumentKind(db);
   migrateTrashColumns(db);
   migrateBacklinkSourceBlockId(db);
+  migrateDocumentSharePublicColumns(db);
+
+  // Create tables
+  db.exec(SCHEMA_SQL);
 
   // Seed on first launch
   const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM spaces').get();
