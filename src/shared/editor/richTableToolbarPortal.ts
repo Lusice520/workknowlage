@@ -64,6 +64,26 @@ interface RichTableEdgeHandleViewportPositionInput {
   visualGap?: number;
 }
 
+interface RichTableEdgeHandleClipRect {
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+}
+
+interface ClampRichTableEdgeHandleViewportPositionInput {
+  axis: 'col' | 'row';
+  clipRect: RichTableEdgeHandleClipRect;
+  edgePadding?: number;
+  handleRect: {
+    height?: number;
+    left: number;
+    top: number;
+    width?: number;
+  };
+  handleThickness?: number;
+}
+
 export const getRichTableGripViewportPosition = ({
   anchorRect,
   axis,
@@ -115,5 +135,63 @@ export const getRichTableEdgeHandleViewportPosition = ({
     top: Math.round(tableRect.top + (tableRect.height / 2)),
     left: Math.round(tableRect.left + tableRect.width + handleOutset + visualGap),
     height: Math.round(Math.max(minLength ?? 56, tableRect.height)),
+  };
+};
+
+export const intersectRichTableClipRects = (
+  rects: Array<RichTableEdgeHandleClipRect | null | undefined>
+): RichTableEdgeHandleClipRect | null => {
+  const validRects = rects.filter(Boolean) as RichTableEdgeHandleClipRect[];
+  if (validRects.length === 0) {
+    return null;
+  }
+
+  const intersection = validRects.reduce((current, rect) => ({
+    top: Math.max(current.top, rect.top),
+    left: Math.max(current.left, rect.left),
+    right: Math.min(current.right, rect.right),
+    bottom: Math.min(current.bottom, rect.bottom),
+  }));
+
+  if (intersection.right <= intersection.left || intersection.bottom <= intersection.top) {
+    return null;
+  }
+
+  return {
+    top: Math.round(intersection.top),
+    left: Math.round(intersection.left),
+    right: Math.round(intersection.right),
+    bottom: Math.round(intersection.bottom),
+  };
+};
+
+export const clampRichTableEdgeHandleViewportPosition = ({
+  axis,
+  clipRect,
+  edgePadding = 12,
+  handleRect,
+  handleThickness = 18,
+}: ClampRichTableEdgeHandleViewportPositionInput) => {
+  if (axis === 'row') {
+    return handleRect;
+  }
+
+  const handleHalfThickness = handleThickness / 2;
+  const minLeft = clipRect.left + handleHalfThickness + edgePadding;
+  const maxLeft = clipRect.right - handleHalfThickness - edgePadding;
+  const handleHalfHeight = (handleRect.height ?? 0) / 2;
+  const rawTop = handleRect.top - handleHalfHeight;
+  const rawBottom = handleRect.top + handleHalfHeight;
+  const minTop = clipRect.top + edgePadding;
+  const maxBottom = clipRect.bottom - edgePadding;
+  const clippedTop = Math.max(rawTop, minTop);
+  const clippedBottom = Math.max(clippedTop, Math.min(rawBottom, maxBottom));
+  const clippedHeight = Math.max(0, Math.round(clippedBottom - clippedTop));
+
+  return {
+    ...handleRect,
+    top: Math.round(clippedTop + (clippedHeight / 2)),
+    left: Math.round(Math.min(Math.max(handleRect.left, minLeft), maxLeft)),
+    ...(handleRect.height == null ? {} : { height: clippedHeight }),
   };
 };

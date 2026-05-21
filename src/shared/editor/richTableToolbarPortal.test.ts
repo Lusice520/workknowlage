@@ -3,6 +3,8 @@ import {
   getRichTableToolbarViewportPosition,
   getRichTableGripViewportPosition,
   getRichTableEdgeHandleViewportPosition,
+  clampRichTableEdgeHandleViewportPosition,
+  intersectRichTableClipRects,
 } from './richTableToolbarPortal';
 
 describe('getRichTableToolbarViewportPosition', () => {
@@ -103,6 +105,88 @@ describe('getRichTableEdgeHandleViewportPosition', () => {
       top: 331,
       left: 1143,
       height: 246,
+    });
+  });
+});
+
+describe('clampRichTableEdgeHandleViewportPosition', () => {
+  test('keeps the add-column handle visible with an inset from the editor right edge when the table grows past the viewport', () => {
+    expect(
+      clampRichTableEdgeHandleViewportPosition({
+        axis: 'col',
+        edgePadding: 9,
+        handleRect: {
+          top: 331,
+          left: 1143,
+          height: 246,
+        },
+        clipRect: {
+          top: 120,
+          left: 80,
+          right: 1080,
+          bottom: 780,
+        },
+      })
+    ).toEqual({
+      top: 331,
+      left: 1062,
+      height: 246,
+    });
+  });
+
+  test('clips the add-column handle height to the visible editor bounds when the table is taller than the viewport', () => {
+    expect(
+      clampRichTableEdgeHandleViewportPosition({
+        axis: 'col',
+        edgePadding: 9,
+        handleRect: {
+          top: 331,
+          left: 1143,
+          height: 520,
+        },
+        clipRect: {
+          top: 180,
+          left: 80,
+          right: 1080,
+          bottom: 540,
+        },
+      })
+    ).toEqual({
+      top: 360,
+      left: 1062,
+      height: 342,
+    });
+  });
+});
+
+describe('intersectRichTableClipRects', () => {
+  test('intersects the table shell, editor surface, and viewport into the visible clip rect', () => {
+    expect(
+      intersectRichTableClipRects([
+        {
+          top: 140,
+          left: 120,
+          right: 1080,
+          bottom: 980,
+        },
+        {
+          top: 212,
+          left: 96,
+          right: 1048,
+          bottom: 612,
+        },
+        {
+          top: 0,
+          left: 0,
+          right: 1440,
+          bottom: 900,
+        },
+      ])
+    ).toEqual({
+      top: 212,
+      left: 120,
+      right: 1048,
+      bottom: 612,
     });
   });
 });

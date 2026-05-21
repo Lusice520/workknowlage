@@ -24,7 +24,6 @@
   position: relative;
   min-width: var(--rt-track-min-width, 100%);
   width: max(100%, var(--rt-track-min-width, 100%));
-  padding-right: 28px;
 }
 
 .rt-top-toolbar-portal {
@@ -226,7 +225,7 @@
   max-width: none;
   min-width: 0;
   overflow: visible;
-  padding-right: 8px;
+  padding-right: var(--rt-col-edge-lane-width, 36px);
   min-height: 0;
 }
 
@@ -286,7 +285,7 @@
 .rt-editor table {
   border-collapse: collapse;
   width: max(100%, var(--rt-track-min-width, 100%));
-  min-width: var(--rt-track-min-width, 100%);
+  min-width: var(--rt-table-min-width, 100%);
   table-layout: fixed;
   border-style: hidden;
 }

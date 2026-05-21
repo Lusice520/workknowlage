@@ -10,7 +10,14 @@ test('keeps rich table edge handles visually attached to the table and extends t
   const css = fs.readFileSync(cssPath, 'utf8');
 
   expect(source).toContain('getRichTableEdgeHandleViewportPosition');
+  expect(source).toContain('getRichTableTableMinWidth');
+  expect(source).toContain('getRichTableTrackMinWidth');
+  expect(source).toContain('RICH_TABLE_COL_EDGE_ACTION_LANE_WIDTH');
+  expect(source).toContain('updateTableGripPositions(cell);');
+  expect(source).toContain('updateTableGripPositions();');
   expect(geometry).toContain('visualGap = 4');
+  expect(geometry).toContain('clampRichTableEdgeHandleViewportPosition');
+  expect(geometry).toContain('intersectRichTableClipRects');
   expect(css).toContain('.rt-add-col-handle::before,');
   expect(css).toContain('.rt-add-row-handle::before {');
   expect(css).toContain('pointer-events: auto;');

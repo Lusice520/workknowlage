@@ -1,6 +1,7 @@
 export const RICH_TABLE_DEFAULT_COLUMN_COUNT = 3;
 export const RICH_TABLE_SCROLL_COLUMN_THRESHOLD = 6;
 export const RICH_TABLE_MIN_COLUMN_WIDTH = 160;
+export const RICH_TABLE_COL_EDGE_ACTION_LANE_WIDTH = 36;
 
 export const buildDefaultRichTableDoc = (columnCount = RICH_TABLE_DEFAULT_COLUMN_COUNT): any => {
   const normalizedColumnCount = Math.max(1, Math.floor(columnCount || RICH_TABLE_DEFAULT_COLUMN_COUNT));
@@ -44,6 +45,16 @@ export const getRichTableColumnCount = (doc: any) => {
 };
 
 export const getRichTableTrackMinWidth = (columnCount: number) => {
+  const tableMinWidth = getRichTableTableMinWidth(columnCount);
+
+  if (tableMinWidth === '100%') {
+    return tableMinWidth;
+  }
+
+  return `${parseInt(tableMinWidth, 10) + RICH_TABLE_COL_EDGE_ACTION_LANE_WIDTH}px`;
+};
+
+export const getRichTableTableMinWidth = (columnCount: number) => {
   const normalizedColumnCount = Math.max(1, Math.floor(columnCount || RICH_TABLE_DEFAULT_COLUMN_COUNT));
 
   if (normalizedColumnCount < RICH_TABLE_SCROLL_COLUMN_THRESHOLD) {

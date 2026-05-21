@@ -1,6 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { createReactBlockSpec } from './blocknoteReactNoComments';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Mark, mergeAttributes } from '@tiptap/core';
@@ -18,14 +17,23 @@ import {
   addColumn as pmInsertColumn,
   addRow as pmInsertRow,
 } from 'prosemirror-tables';
-import { Bold, Italic, Underline as UnderlineIcon, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Palette, Plus, Check, Ellipsis, EllipsisVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bold, Italic, Underline as UnderlineIcon, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Palette, Plus, Check, Ellipsis, EllipsisVertical, ChevronLeft, ChevronRight, Columns2 } from 'lucide-react';
 import { applyClipboardTableToDoc, htmlTableHasMergedCells, parseClipboardTable, tableDocHasMergedCells } from './richTablePasteUtils';
-import { buildDefaultRichTableDoc, getRichTableColumnCount, getRichTableTrackMinWidth } from './richTableLayout';
+import {
+  buildDefaultRichTableDoc,
+  getRichTableColumnCount,
+  getRichTableTableMinWidth,
+  getRichTableTrackMinWidth,
+  RICH_TABLE_COL_EDGE_ACTION_LANE_WIDTH,
+} from './richTableLayout';
 import {
   getRichTableEdgeHandleViewportPosition,
   getRichTableGripViewportPosition,
   getRichTableToolbarViewportPosition,
 } from './richTableToolbarPortal';
+import { useRichTableCommands } from './useRichTableCommands';
+import { useRichTableOverlayModel } from './useRichTableOverlayModel';
+import { RichTableOverlay } from './RichTableOverlay';
 import { shouldShowRichTableToolbar } from './richTableUiState';
 import './RichTable.css';
 
@@ -432,13 +440,13 @@ const ToolbarButton = ({ onClick, disabled, active, icon, title }: any) => (
 );
 
 const RichTableEditor = ({ block, editor: bnEditor }: any) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const hoveredCellRef = useRef<any>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const toolbarPortalRef = useRef<HTMLDivElement | null>(null);
-  const floatingControlsPortalRef = useRef<HTMLDivElement | null>(null);
-  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const toolbarPortalRef = useRef<HTMLDivElement>(null);
+  const floatingControlsPortalRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const lastSerializedRef = useRef(block.props.data || '');
   const initialContent = parseDoc(block.props.data);
   const [hint, setHint] = useState('');
@@ -1139,6 +1147,7 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
   const activeCellBackground = getActiveCellBackground();
   const shouldShowEdgeHandles = showUi && !!tableFrame && (isTableHovered || isEdgeHandleHovered || openRowMenu || openColMenu);
   const shouldShowTableGrips = showUi && (isTableHovered || isEdgeHandleHovered || openRowMenu || openColMenu);
+  const tableMinWidth = getRichTableTableMinWidth(tableColumnCount);
   const trackMinWidth = getRichTableTrackMinWidth(tableColumnCount);
   const colEdgeHandlePosition = tableViewportFrame
     ? getRichTableEdgeHandleViewportPosition({
@@ -1175,250 +1184,92 @@ const RichTableEditor = ({ block, editor: bnEditor }: any) => {
     return { ...rowEdgeHandlePosition, width: w, left: visLeft + w / 2 };
   })();
 
-  // Clamp grip positions to editor bounds
-  const clampedRowGripPos = (() => {
-    if (!rowGripPos || !editorClip) return rowGripPos;
-    if (rowGripPos.left < editorClip.left - 20 || rowGripPos.left > editorClip.right + 5) return null;
-    return rowGripPos;
-  })();
-  const clampedColGripPos = (() => {
-    if (!colGripPos || !editorClip) return colGripPos;
-    if (colGripPos.left < editorClip.left - 5 || colGripPos.left > editorClip.right + 5) return null;
-    return colGripPos;
-  })();
-  const toolbarPortal = typeof document !== 'undefined' && showUi
-    ? createPortal(
-        <div
-          ref={toolbarPortalRef}
-          className="rt-top-toolbar-portal"
-          style={{
-            top: `${toolbarViewportPosition?.top ?? 0}px`,
-            left: `${toolbarViewportPosition?.left ?? 0}px`,
-            visibility: toolbarViewportPosition ? 'visible' : 'hidden',
-          }}
-          contentEditable={false}
-        >
-          <div
-            ref={toolbarRef}
-            className={`rt-top-toolbar ${showToolbar ? 'is-visible' : 'is-hidden'}`}
-            contentEditable={false}
-            onMouseDown={(e) => e.preventDefault()}
-            onMouseEnter={() => setIsToolbarHovered(true)}
-            onMouseLeave={() => setIsToolbarHovered(false)}
-          >
-            <ToolbarButton
-              title={isToolbarExpanded ? '收起工具栏' : '展开工具栏'}
-              icon={isToolbarExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-              onClick={() => setIsToolbarExpanded((value) => !value)}
-            />
-            {isToolbarExpanded ? (
-              <>
-                <span className="rt-divider" />
-                <ToolbarButton title="左对齐" icon={<AlignLeft size={14} />} onClick={() => applyCellAlign('left')} />
-                <ToolbarButton title="居中" icon={<AlignCenter size={14} />} onClick={() => applyCellAlign('center')} />
-                <ToolbarButton title="右对齐" icon={<AlignRight size={14} />} onClick={() => applyCellAlign('right')} />
-                <span className="rt-divider" />
-              </>
-            ) : null}
-            <div className="rt-color-wrap" contentEditable={false}>
-              <ToolbarButton
-                title="颜色"
-                icon={<Palette size={14} />}
-                active={openColorMenu}
-                onClick={() => {
-                  setOpenColorMenu((value) => !value);
-                  setOpenRowMenu(false);
-                  setOpenColMenu(false);
-                }}
-              />
-              {openColorMenu ? (
-                <div className="rt-color-menu" contentEditable={false} onMouseDown={(e) => e.preventDefault()}>
-                  <div className="rt-color-section-title">文本</div>
-                  {COLOR_OPTIONS.map((item) => (
-                    <button
-                      key={`txt-${item.label}`}
-                      type="button"
-                      className="rt-color-item"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyTextColor(item.value)}
-                    >
-                      <span className="rt-color-swatch" style={{ color: item.value || '#111827' }}>A</span>
-                      <span>{item.label}</span>
-                      {normalizeColorValue(item.value) === activeTextColor ? <Check size={12} /> : null}
-                    </button>
-                  ))}
-                  <div className="rt-color-section-title">背景色</div>
-                  {BG_OPTIONS.map((item) => (
-                    <button
-                      key={`bg-${item.label}`}
-                      type="button"
-                      className="rt-color-item"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyCellBackground(item.value)}
-                    >
-                      <span className="rt-color-swatch bg" style={{ backgroundColor: item.value || 'transparent' }}>A</span>
-                      <span>{item.label}</span>
-                      {normalizeColorValue(item.value) === activeCellBackground ? <Check size={12} /> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <ToolbarButton title="合并单元格" icon={<span className="rt-mini-text">合</span>} onClick={() => run(() => chainTableFocus()?.mergeCells().run() ?? false, '请先选择多个相邻单元格再合并')} />
-            <ToolbarButton title="拆分单元格" icon={<span className="rt-mini-text">拆</span>} onClick={() => run(() => chainTableFocus()?.splitCell().run() ?? false, '当前单元格不可拆分')} />
-            {isToolbarExpanded ? (
-              <>
-                <span className="rt-divider" />
-                <ToolbarButton title="表头行" icon={<span className="rt-mini-text">行头</span>} onClick={() => run(() => chainTableFocus()?.toggleHeaderRow().run() ?? false, '请先定位到单元格')} />
-                <ToolbarButton title="表头列" icon={<span className="rt-mini-text">列头</span>} onClick={() => run(() => chainTableFocus()?.toggleHeaderColumn().run() ?? false, '请先定位到单元格')} />
-              </>
-            ) : null}
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
-  const floatingControlsPortal = typeof document !== 'undefined' && showUi
-    ? createPortal(
-        <div ref={floatingControlsPortalRef} className="rt-floating-controls-portal" contentEditable={false}>
-          {shouldShowEdgeHandles && colEdgeHandlePosition && colEdgeInBounds ? (
-            <button
-              type="button"
-              className="rt-add-col-handle"
-              style={{
-                top: `${colEdgeHandlePosition.top}px`,
-                left: `${colEdgeHandlePosition.left}px`,
-                height: `${colEdgeHandlePosition.height}px`,
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => runAddTableAction(() => runEdgeAppendAction('col'), '添加列失败，请重试')}
-              title="新增列"
-            >
-              <Plus size={EDGE_PLUS_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowEdgeHandles && clampedRowEdge ? (
-            <button
-              type="button"
-              className="rt-add-row-handle"
-              style={{
-                top: `${clampedRowEdge.top}px`,
-                left: `${clampedRowEdge.left}px`,
-                width: `${clampedRowEdge.width}px`,
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => runAddTableAction(() => runEdgeAppendAction('row'), '添加行失败，请重试')}
-              title="新增行"
-            >
-              <Plus size={EDGE_PLUS_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowTableGrips && clampedRowGripPos ? (
-            <button
-              type="button"
-              className={`rt-table-grip row ${openRowMenu ? 'active' : ''}`}
-              style={{ top: `${clampedRowGripPos.top}px`, left: `${clampedRowGripPos.left}px` }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => {
-                const selected = run(
-                  () => selectAxisFromHandle('row'),
-                  '请先将光标放在目标行中的单元格内'
-                );
-                if (!selected) return;
-                setOpenRowMenu((value) => !value);
-                setOpenColMenu(false);
-                setOpenColorMenu(false);
-              }}
-              title="行操作"
-            >
-              <EllipsisVertical size={GRIP_ICON_SIZE} />
-            </button>
-          ) : null}
-          {shouldShowTableGrips && clampedColGripPos ? (
-            <button
-              type="button"
-              className={`rt-table-grip col ${openColMenu ? 'active' : ''}`}
-              style={{ top: `${clampedColGripPos.top}px`, left: `${clampedColGripPos.left}px` }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setIsEdgeHandleHovered(true)}
-              onMouseLeave={() => setIsEdgeHandleHovered(false)}
-              onClick={() => {
-                const selected = run(
-                  () => selectAxisFromHandle('col'),
-                  '请先将光标放在目标列中的单元格内'
-                );
-                if (!selected) return;
-                setOpenColMenu((value) => !value);
-                setOpenRowMenu(false);
-                setOpenColorMenu(false);
-              }}
-              title="列操作"
-            >
-              <Ellipsis size={GRIP_ICON_SIZE} />
-            </button>
-          ) : null}
-          {openRowMenu ? (
-            <div
-              className="rt-handle-menu"
-              style={{
-                top: clampedRowGripPos ? `${clampedRowGripPos.top}px` : undefined,
-                left: clampedRowGripPos ? `${clampedRowGripPos.left + GRIP_MENU_OFFSET}px` : undefined,
-                transform: 'translateY(-50%)',
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addRowBefore().run() ?? false, '请先定位到单元格')}>上方添加行</button>
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addRowAfter().run() ?? false, '请先定位到单元格')}>下方添加行</button>
-              <button type="button" className="danger" onClick={() => runTableAction(() => chainTableFocus()?.deleteRow().run() ?? false, '请先定位到单元格')}>删除行</button>
-            </div>
-          ) : null}
-          {openColMenu ? (
-            <div
-              className="rt-handle-menu"
-              style={{
-                top: clampedColGripPos ? `${clampedColGripPos.top + GRIP_MENU_OFFSET}px` : undefined,
-                left: clampedColGripPos ? `${clampedColGripPos.left}px` : undefined,
-                transform: 'translateX(-50%)',
-              }}
-              contentEditable={false}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addColumnBefore().run() ?? false, '请先定位到单元格')}>左侧添加列</button>
-              <button type="button" onClick={() => runAddTableAction(() => chainTableFocus()?.addColumnAfter().run() ?? false, '请先定位到单元格')}>右侧添加列</button>
-              <button type="button" className="danger" onClick={() => runTableAction(() => chainTableFocus()?.deleteColumn().run() ?? false, '请先定位到单元格')}>删除列</button>
-            </div>
-          ) : null}
-        </div>,
-        document.body
-      )
-    : null;
+  const getTableWidth = () => {
+    const tableElement = containerRef.current?.querySelector('.rt-editor table') as HTMLTableElement | null;
+    return tableElement?.getBoundingClientRect().width ?? 0;
+  };
+  const commandApi = useRichTableCommands({
+    applyCellAlign,
+    applyCellBackground,
+    applyTextColor,
+    chainTableFocus,
+    closeInlineMenus,
+    collapseCellSelectionToCursor,
+    editor,
+    focusTableEditor,
+    getTableWidth,
+    runAddTableAction,
+    runEdgeAppendAction,
+    runTableAction,
+    selectAxisFromHandle,
+    setHint,
+    updateTableGripPositions,
+  });
+  const overlayModel = useRichTableOverlayModel({
+    activeCellBackground,
+    activeTextColor,
+    containerRef,
+    colGripPos,
+    hasActiveSelection: !!editor?.state.selection && !editor.state.selection.empty,
+    hasCollapsedCellCursor: !!editor?.state.selection?.empty
+      && (editor?.isActive('tableCell') || editor?.isActive('tableHeader')),
+    isColActionLaneHovered: false,
+    isEditable: editor?.isEditable ?? false,
+    isEdgeHandleHovered,
+    isFocused: editor?.isFocused ?? false,
+    isRowActionLaneHovered: false,
+    isTableActive: editor?.isEditable ? editor.isActive('table') : false,
+    isTableHovered,
+    isToolbarHovered,
+    isToolbarExpanded,
+    openColMenu,
+    openColorMenu,
+    openRowMenu,
+    rowGripPos,
+    showUi,
+    tableFrame,
+    tableViewportFrame,
+    toolbarRef,
+  });
+  const overlayActions = {
+    setIsToolbarHovered,
+    setIsEdgeHandleHovered,
+    setIsToolbarExpanded,
+    setOpenColorMenu,
+    setOpenRowMenu,
+    setOpenColMenu,
+  };
 
   return (
-    <div className="rt-container" ref={containerRef}>
-      {toolbarPortal}
-      {floatingControlsPortal}
-      <div className="rt-scroll-shell">
-        <div className="rt-scroll-track" style={{ ['--rt-track-min-width' as string]: trackMinWidth }}>
-          <div className="rt-editor-shell" onMouseDownCapture={handleShellMouseDownCapture}>
-            <div className="rt-editor-content">
-              <EditorContent editor={editor} />
+    <>
+      <RichTableOverlay
+        actions={overlayActions}
+        commandApi={commandApi}
+        floatingControlsPortalRef={floatingControlsPortalRef}
+        overlayModel={overlayModel}
+        toolbarPortalRef={toolbarPortalRef}
+        toolbarRef={toolbarRef}
+      />
+      <div className="rt-container" ref={containerRef}>
+        <div className="rt-scroll-shell">
+          <div
+            className="rt-scroll-track"
+            style={{
+              ['--rt-track-min-width' as string]: trackMinWidth,
+              ['--rt-table-min-width' as string]: tableMinWidth,
+              ['--rt-col-edge-lane-width' as string]: `${RICH_TABLE_COL_EDGE_ACTION_LANE_WIDTH}px`,
+            }}
+          >
+            <div className="rt-editor-shell" onMouseDownCapture={handleShellMouseDownCapture}>
+              <div className="rt-editor-content">
+                <EditorContent editor={editor} />
+              </div>
             </div>
           </div>
         </div>
+        {hint ? <div className="rt-hint" contentEditable={false}>{hint}</div> : null}
       </div>
-      {hint ? <div className="rt-hint" contentEditable={false}>{hint}</div> : null}
-    </div>
+    </>
   );
 };
 

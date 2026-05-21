@@ -11,10 +11,12 @@ test('styles rich table editor surface and edge handles like the WorkPlan implem
   expect(css).toContain('overflow-x: auto;');
   expect(css).toContain('.rt-scroll-track {');
   expect(css).toContain('min-width: var(--rt-track-min-width, 100%);');
+  expect(css).toContain('width: max(100%, var(--rt-track-min-width, 100%));');
   expect(css).toContain('.rt-top-toolbar-portal {');
   expect(css).toContain('position: fixed;');
   expect(css).toContain('.rt-floating-controls-portal {');
   expect(css).toContain('.rt-editor-shell {');
+  expect(css).toContain('padding-right: var(--rt-col-edge-lane-width, 36px);');
   expect(css).toContain('min-height: 0;');
   expect(css).toContain('.rt-editor {');
   expect(css).toContain('.rt-editor .tableWrapper {');
@@ -26,7 +28,8 @@ test('styles rich table editor surface and edge handles like the WorkPlan implem
   expect(css).toContain('.rt-editor li {');
   expect(css).toContain('display: list-item;');
   expect(css).toContain('.rt-editor table {');
-  expect(css).toContain('min-width: var(--rt-track-min-width, 100%);');
+  expect(css).toContain('width: max(100%, var(--rt-track-min-width, 100%));');
+  expect(css).toContain('min-width: var(--rt-table-min-width, 100%);');
   expect(css).toContain('.rt-editor th,');
   expect(css).toContain('.rt-editor td {');
   expect(css).toContain('border: 1px solid #e2e8f0;');

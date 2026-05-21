@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { shouldShowRichTableToolbar } from './richTableUiState';
+import {
+  shouldShowRichTableColEdgeHandle,
+  shouldShowRichTableRowEdgeHandle,
+  shouldShowRichTableToolbar,
+} from './richTableUiState';
 
 describe('shouldShowRichTableToolbar', () => {
   test('hides the toolbar when the table editor is not focused', () => {
@@ -74,6 +78,32 @@ describe('shouldShowRichTableToolbar', () => {
       openColorMenu: true,
       openRowMenu: false,
       openColMenu: false,
+    })).toBe(true);
+  });
+
+  test('shows edge handles only when the table is visible and the action lane is active', () => {
+    expect(shouldShowRichTableColEdgeHandle({
+      showUi: false,
+      hasTableFrame: true,
+      isActionLaneHovered: true,
+      isEdgeHandleHovered: false,
+      openMenu: false,
+    })).toBe(false);
+
+    expect(shouldShowRichTableColEdgeHandle({
+      showUi: true,
+      hasTableFrame: true,
+      isActionLaneHovered: true,
+      isEdgeHandleHovered: false,
+      openMenu: false,
+    })).toBe(true);
+
+    expect(shouldShowRichTableRowEdgeHandle({
+      showUi: true,
+      hasTableFrame: true,
+      isActionLaneHovered: false,
+      isEdgeHandleHovered: true,
+      openMenu: false,
     })).toBe(true);
   });
 });
