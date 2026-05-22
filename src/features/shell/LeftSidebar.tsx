@@ -130,6 +130,11 @@ export function LeftSidebar({
     setRootDropActive(false);
   };
 
+  const clearTreeDropTarget = () => {
+    setDropTarget(null);
+    setRootDropActive(false);
+  };
+
   const handleTreeDragStart = (nextDragState: Exclude<TreeDragState, null>) => {
     setDragState(nextDragState);
     setDropTarget(null);
@@ -148,6 +153,7 @@ export function LeftSidebar({
       ? isInvalidFolderDropTarget(state, nextDragState, folderId)
       : isInvalidTreeReorderTarget(state, nextDragState, 'folder', folderId);
     if (isInvalidTarget) {
+      clearTreeDropTarget();
       return;
     }
 
@@ -203,6 +209,7 @@ export function LeftSidebar({
       ? isInvalidDocumentDropTarget(state, nextDragState, documentId)
       : isInvalidTreeReorderTarget(state, nextDragState, 'document', documentId);
     if (isInvalidTarget) {
+      clearTreeDropTarget();
       return;
     }
 
@@ -253,6 +260,7 @@ export function LeftSidebar({
   const handleRootDragOver = (event: DragEvent<HTMLDivElement>) => {
     const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragState);
     if (isInvalidRootDropTarget(state, nextDragState)) {
+      clearTreeDropTarget();
       return;
     }
 

@@ -148,9 +148,15 @@ export const getTreeNodeDropPosition = (event: DragEvent<HTMLElement>): TreeNode
     return 'inside';
   }
 
-  const offsetY = typeof nativeOffsetY === 'number' && nativeOffsetY > 0
-    ? nativeOffsetY
-    : event.clientY - rect.top;
+  const clientOffsetY = event.clientY - rect.top;
+  const offsetY = Number.isFinite(clientOffsetY)
+    ? clientOffsetY
+    : nativeOffsetY;
+
+  if (typeof offsetY !== 'number' || !Number.isFinite(offsetY)) {
+    return 'inside';
+  }
+
   if (offsetY < rect.height * 0.28) {
     return 'before';
   }

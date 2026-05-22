@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, vi } from 'vitest';
 import App from '../../app/App';
@@ -367,6 +367,26 @@ function createDragDataTransfer() {
     effectAllowed: 'move',
     dropEffect: 'move',
   };
+}
+
+function fireTreeDragEvent(
+  target: HTMLElement,
+  type: 'dragOver' | 'drop',
+  dataTransfer: ReturnType<typeof createDragDataTransfer>,
+  options: { clientY?: number; offsetY?: number } = {},
+) {
+  const event = type === 'dragOver'
+    ? createEvent.dragOver(target, { dataTransfer })
+    : createEvent.drop(target, { dataTransfer });
+
+  if (options.clientY !== undefined) {
+    Object.defineProperty(event, 'clientY', { value: options.clientY });
+  }
+  if (options.offsetY !== undefined) {
+    Object.defineProperty(event, 'offsetY', { value: options.offsetY });
+  }
+
+  fireEvent(target, event);
 }
 
 async function openSidebarMenu(sidebar: HTMLElement, label: string) {
@@ -1770,6 +1790,104 @@ test('reorders root folders after a sibling from the target lower half', async (
       'tree-node-folder-folder-alpha',
     ]);
   });
+});
+
+test('reorders using the full row geometry instead of child element offsets', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: [],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+        { id: 'folder-bravo', spaceId: 'space-alpha', parentId: null, name: 'Bravo Folder', sortOrder: 1 },
+      ],
+      documents: [],
+    },
+  };
+
+  const reorderTreeNode = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onReorderTreeNode: reorderTreeNode });
+
+  const draggedFolderRow = screen.getByTestId('tree-node-folder-folder-alpha');
+  const targetFolderRow = screen.getByTestId('tree-node-folder-folder-bravo');
+  vi.spyOn(targetFolderRow, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 40,
+    left: 0,
+    right: 200,
+    width: 200,
+    height: 40,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const dataTransfer = createDragDataTransfer();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedFolderRow, { dataTransfer });
+  });
+  fireTreeDragEvent(targetFolderRow, 'dragOver', dataTransfer, { clientY: 35, offsetY: 2 });
+  fireTreeDragEvent(targetFolderRow, 'drop', dataTransfer, { clientY: 35, offsetY: 2 });
+
+  await waitFor(() => {
+    expect(reorderTreeNode).toHaveBeenCalledWith({
+      draggedKind: 'folder',
+      draggedId: 'folder-alpha',
+      targetKind: 'folder',
+      targetId: 'folder-bravo',
+      position: 'after',
+    });
+  });
+});
+
+test('clears stale row drop indicators when the current drag target is invalid', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: [],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+        { id: 'folder-bravo', spaceId: 'space-alpha', parentId: null, name: 'Bravo Folder', sortOrder: 1 },
+      ],
+      documents: [],
+    },
+  };
+
+  await renderSidebarHarness({ initialState });
+
+  const draggedFolderRow = screen.getByTestId('tree-node-folder-folder-alpha');
+  const targetFolderRow = screen.getByTestId('tree-node-folder-folder-bravo');
+  vi.spyOn(targetFolderRow, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 40,
+    left: 0,
+    right: 200,
+    width: 200,
+    height: 40,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const dataTransfer = createDragDataTransfer();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedFolderRow, { dataTransfer });
+  });
+  dataTransfer.setData(treeDropPositionMime, 'after');
+  fireEvent.dragOver(targetFolderRow, { dataTransfer, clientY: 35, offsetY: 35 });
+
+  expect(targetFolderRow.className).toContain('border-b-2');
+
+  dataTransfer.setData(treeDropPositionMime, 'inside');
+  fireEvent.dragOver(draggedFolderRow, { dataTransfer, clientY: 20, offsetY: 20 });
+
+  expect(targetFolderRow.className).not.toContain('border-b-2');
 });
 
 test('drags a folder into another folder and reloads the tree', async () => {
