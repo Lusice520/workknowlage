@@ -6,7 +6,7 @@ WorkKnowlage 使用全局 Lusice collaboration system，并叠加本项目自己
 
 ### Issue tracker
 
-Issues and PRDs are tracked as local markdown files under `.scratch/`, not GitHub or GitLab. See `docs/agents/issue-tracker.md`.
+Issues are tracked as local markdown when needed; PRD and SPEC source-of-truth files live under `docs/requirements/`. Temporary agent drafts may use `.scratch/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -18,13 +18,19 @@ This repo uses a single-context domain documentation layout. See `docs/agents/do
 
 ## Project execution system
 
-开始重要项目工作前，先读取相关项目文件：
+开始项目工作前采用分层读取，避免默认全量加载。先读最小入口，再按任务触发扩展。
 
-- `docs/agents/project-profile.md`
-- `docs/agents/source-map.md`
+最小入口：
+
 - `docs/agents/task-routing.md`
-- `docs/agents/quality-gates.md`
-- `docs/agents/memory/project-lessons.md`
+- 与当前任务直接相关的 PRD / SPEC、代码和测试
+
+按触发条件扩展：
+
+- 需要产品/领域定位时，读 `docs/agents/project-profile.md`
+- 需要找代码位置时，读 `docs/agents/source-map.md`
+- 需要发布、打包或质量门时，读 `docs/agents/quality-gates.md`
+- 出现历史问题、回归或用户纠偏时，读 `docs/agents/memory/project-lessons.md`
 
 涉及专项工作时，再读取：
 
