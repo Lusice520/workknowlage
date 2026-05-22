@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { getChildDocuments, getChildFolders, getTreeItemsForContainer } from '../../shared/lib/workspaceSelectors';
-import type { DocumentCreateOptions, DocumentRecord, FolderNode, TreeReorderInput, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, DocumentRecord, FolderNode, TreeNodeKind, TreeReorderInput, WorkspaceState } from '../../shared/types/workspace';
 import {
   createDocumentDragState,
   createFolderDragState,
@@ -66,6 +66,37 @@ const getDropPositionClass = (
   return '';
 };
 
+interface SubtreeExitDropTargetProps {
+  kind: TreeNodeKind;
+  id: string;
+  dropTarget: TreeNodeDropTarget | null;
+  onTreeNodeAfterDragOver: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => void;
+  onTreeNodeAfterDrop: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => Promise<void>;
+}
+
+function SubtreeExitDropTarget({
+  kind,
+  id,
+  dropTarget,
+  onTreeNodeAfterDragOver,
+  onTreeNodeAfterDrop,
+}: SubtreeExitDropTargetProps): JSX.Element {
+  const isActive = dropTarget?.kind === kind && dropTarget.id === id && dropTarget.position === 'after';
+
+  return (
+    <div
+      data-testid={`tree-node-${kind}-${id}-exit-drop`}
+      className={`my-0.5 h-2 rounded-full transition-colors ${
+        isActive ? 'bg-blue-300/80' : 'bg-transparent hover:bg-blue-100/70'
+      }`}
+      onDragOver={(event) => onTreeNodeAfterDragOver(event, kind, id)}
+      onDrop={(event) => {
+        void onTreeNodeAfterDrop(event, kind, id);
+      }}
+    />
+  );
+}
+
 interface DocumentTreeItemProps {
   state: WorkspaceState;
   document: DocumentRecord;
@@ -95,6 +126,8 @@ interface DocumentTreeItemProps {
   onFolderDrop: (event: DragEvent<HTMLElement>, folderId: string) => Promise<void>;
   onDocumentDragOver: (event: DragEvent<HTMLElement>, documentId: string) => void;
   onDocumentDrop: (event: DragEvent<HTMLElement>, documentId: string) => Promise<void>;
+  onTreeNodeAfterDragOver: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => void;
+  onTreeNodeAfterDrop: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => Promise<void>;
 }
 
 export function DocumentTreeItem({
@@ -126,6 +159,8 @@ export function DocumentTreeItem({
   onFolderDrop,
   onDocumentDragOver,
   onDocumentDrop,
+  onTreeNodeAfterDragOver,
+  onTreeNodeAfterDrop,
 }: DocumentTreeItemProps): JSX.Element {
   const isActive = document.id === activeDocumentId;
   const isDocEditing = editingId === document.id;
@@ -318,6 +353,8 @@ export function DocumentTreeItem({
                 onFolderDrop={onFolderDrop}
                 onDocumentDragOver={onDocumentDragOver}
                 onDocumentDrop={onDocumentDrop}
+                onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+                onTreeNodeAfterDrop={onTreeNodeAfterDrop}
               />
             ) : (
               <DocumentTreeItem
@@ -350,9 +387,20 @@ export function DocumentTreeItem({
                 onFolderDrop={onFolderDrop}
                 onDocumentDragOver={onDocumentDragOver}
                 onDocumentDrop={onDocumentDrop}
+                onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+                onTreeNodeAfterDrop={onTreeNodeAfterDrop}
               />
             )
           ))}
+          {dragState ? (
+            <SubtreeExitDropTarget
+              kind="document"
+              id={document.id}
+              dropTarget={dropTarget}
+              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -386,6 +434,8 @@ interface FolderSectionProps {
   onFolderDrop: (event: DragEvent<HTMLElement>, folderId: string) => Promise<void>;
   onDocumentDragOver: (event: DragEvent<HTMLElement>, documentId: string) => void;
   onDocumentDrop: (event: DragEvent<HTMLElement>, documentId: string) => Promise<void>;
+  onTreeNodeAfterDragOver: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => void;
+  onTreeNodeAfterDrop: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => Promise<void>;
 }
 
 export function FolderSection({
@@ -415,6 +465,8 @@ export function FolderSection({
   onFolderDrop,
   onDocumentDragOver,
   onDocumentDrop,
+  onTreeNodeAfterDragOver,
+  onTreeNodeAfterDrop,
 }: FolderSectionProps): JSX.Element {
   const isExpanded = state.expandedFolderIds.includes(folder.id);
   const isEditing = editingId === folder.id;
@@ -581,6 +633,8 @@ export function FolderSection({
                 onFolderDrop={onFolderDrop}
                 onDocumentDragOver={onDocumentDragOver}
                 onDocumentDrop={onDocumentDrop}
+                onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+                onTreeNodeAfterDrop={onTreeNodeAfterDrop}
               />
             ) : (
               <DocumentTreeItem
@@ -613,9 +667,20 @@ export function FolderSection({
                 onFolderDrop={onFolderDrop}
                 onDocumentDragOver={onDocumentDragOver}
                 onDocumentDrop={onDocumentDrop}
+                onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+                onTreeNodeAfterDrop={onTreeNodeAfterDrop}
               />
             )
           ))}
+          {dragState ? (
+            <SubtreeExitDropTarget
+              kind="folder"
+              id={folder.id}
+              dropTarget={dropTarget}
+              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>

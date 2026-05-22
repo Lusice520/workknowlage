@@ -1890,6 +1890,117 @@ test('clears stale row drop indicators when the current drag target is invalid',
   expect(targetFolderRow.className).not.toContain('border-b-2');
 });
 
+test('moves a child document out from the bottom of an expanded folder subtree', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-alpha',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+      ],
+      documents: [
+        {
+          id: 'doc-alpha',
+          spaceId: 'space-alpha',
+          folderId: 'folder-alpha',
+          title: 'Alpha Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '10 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+          sortOrder: 0,
+        },
+      ],
+    },
+  };
+
+  const reorderTreeNode = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onReorderTreeNode: reorderTreeNode });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  const draggedDocumentRow = screen.getByTestId('tree-node-document-doc-alpha');
+  const sourceSection = within(sidebar).getByText('Alpha Folder').closest('section');
+  const dataTransfer = createDragDataTransfer();
+
+  expect(sourceSection).not.toBeNull();
+  expect(within(sourceSection!).getByText('Alpha Doc')).toBeInTheDocument();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedDocumentRow, { dataTransfer });
+  });
+
+  const folderExitDrop = screen.getByTestId('tree-node-folder-folder-alpha-exit-drop');
+  fireTreeDragEvent(folderExitDrop, 'dragOver', dataTransfer, { clientY: 8 });
+  fireTreeDragEvent(folderExitDrop, 'drop', dataTransfer, { clientY: 8 });
+
+  await waitFor(() => {
+    expect(reorderTreeNode).toHaveBeenCalledWith({
+      draggedKind: 'document',
+      draggedId: 'doc-alpha',
+      targetKind: 'folder',
+      targetId: 'folder-alpha',
+      position: 'after',
+    });
+    expect(within(sourceSection!).queryByText('Alpha Doc')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('sidebar-root-tree')).getByText('Alpha Doc')).toBeInTheDocument();
+  });
+});
+
+test('moves a child folder out from the bottom of an expanded folder subtree', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: ['folder-alpha', 'folder-child'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+        { id: 'folder-child', spaceId: 'space-alpha', parentId: 'folder-alpha', name: 'Child Folder', sortOrder: 0 },
+      ],
+      documents: [],
+    },
+  };
+
+  const reorderTreeNode = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onReorderTreeNode: reorderTreeNode });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  const draggedFolderRow = screen.getByTestId('tree-node-folder-folder-child');
+  const sourceSection = within(sidebar).getByText('Alpha Folder').closest('section');
+  const dataTransfer = createDragDataTransfer();
+
+  expect(sourceSection).not.toBeNull();
+  expect(within(sourceSection!).getByText('Child Folder')).toBeInTheDocument();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedFolderRow, { dataTransfer });
+  });
+
+  const folderExitDrop = screen.getByTestId('tree-node-folder-folder-alpha-exit-drop');
+  fireTreeDragEvent(folderExitDrop, 'dragOver', dataTransfer, { clientY: 8 });
+  fireTreeDragEvent(folderExitDrop, 'drop', dataTransfer, { clientY: 8 });
+
+  await waitFor(() => {
+    expect(reorderTreeNode).toHaveBeenCalledWith({
+      draggedKind: 'folder',
+      draggedId: 'folder-child',
+      targetKind: 'folder',
+      targetId: 'folder-alpha',
+      position: 'after',
+    });
+    expect(within(sourceSection!).queryByText('Child Folder')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('sidebar-root-tree')).getByText('Child Folder')).toBeInTheDocument();
+  });
+});
+
 test('drags a folder into another folder and reloads the tree', async () => {
   const initialState: WorkspaceState = {
     activeSpaceId: 'space-alpha',

@@ -3,7 +3,7 @@ import { MantineProvider } from '@mantine/core';
 import { ChevronsUpDown, FileText, Link2, Star } from 'lucide-react';
 import { getRootDocuments, getRootFolders } from '../../shared/lib/workspaceSelectors';
 import type { WorkspaceSearchResultRecord } from '../../shared/types/preload';
-import type { DocumentCreateOptions, Space, TreeReorderInput, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, Space, TreeNodeKind, TreeReorderInput, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
 import { SidebarQuickNotePanel } from './SidebarQuickNotePanel';
 import { SidebarRootSection } from './SidebarRootSection';
 import { SpaceSwitcher } from './SpaceSwitcher';
@@ -257,6 +257,51 @@ export function LeftSidebar({
     }
   };
 
+  const handleTreeNodeAfterDragOver = (
+    event: DragEvent<HTMLElement>,
+    targetKind: TreeNodeKind,
+    targetId: string,
+  ) => {
+    const nextDragState = readTreeDragState(event, dragState);
+    event.stopPropagation();
+
+    if (isInvalidTreeReorderTarget(state, nextDragState, targetKind, targetId)) {
+      clearTreeDropTarget();
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    if (!dragState) {
+      setDragState(nextDragState);
+    }
+    if (dropTarget?.id !== targetId || dropTarget.position !== 'after' || dropTarget.kind !== targetKind) {
+      setDropTarget({ kind: targetKind, id: targetId, position: 'after' });
+    }
+    if (rootDropActive) {
+      setRootDropActive(false);
+    }
+  };
+
+  const handleTreeNodeAfterDrop = async (
+    event: DragEvent<HTMLElement>,
+    targetKind: TreeNodeKind,
+    targetId: string,
+  ) => {
+    const nextDragState = readTreeDragState(event, dragState);
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!nextDragState || isInvalidTreeReorderTarget(state, nextDragState, targetKind, targetId)) {
+      resetTreeDragState();
+      return;
+    }
+
+    resetTreeDragState();
+    await onReorderTreeNode(createTreeReorderInput(nextDragState, targetKind, targetId, 'after'));
+  };
+
   const handleRootDragOver = (event: DragEvent<HTMLDivElement>) => {
     const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragState);
     if (isInvalidRootDropTarget(state, nextDragState)) {
@@ -427,6 +472,8 @@ export function LeftSidebar({
             onFolderDrop={handleFolderDrop}
             onDocumentDragOver={handleDocumentDragOver}
             onDocumentDrop={handleDocumentDrop}
+            onTreeNodeAfterDragOver={handleTreeNodeAfterDragOver}
+            onTreeNodeAfterDrop={handleTreeNodeAfterDrop}
           />
         </div>
 

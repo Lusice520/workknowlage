@@ -1,5 +1,5 @@
 import { type DragEvent } from 'react';
-import type { DocumentCreateOptions, DocumentRecord, FolderNode, TreeReorderInput, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, DocumentRecord, FolderNode, TreeNodeKind, TreeReorderInput, WorkspaceState } from '../../shared/types/workspace';
 import { DocumentTreeItem, FolderSection } from './SidebarTreeItems';
 import type { TreeDragState, TreeNodeDropTarget } from './sidebarTreeDnd';
 export interface SidebarTreeProps {
@@ -31,6 +31,8 @@ export interface SidebarTreeProps {
   onFolderDrop: (event: DragEvent<HTMLElement>, folderId: string) => Promise<void>;
   onDocumentDragOver: (event: DragEvent<HTMLElement>, documentId: string) => void;
   onDocumentDrop: (event: DragEvent<HTMLElement>, documentId: string) => Promise<void>;
+  onTreeNodeAfterDragOver: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => void;
+  onTreeNodeAfterDrop: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => Promise<void>;
 }
 
 export function SidebarTree({
@@ -62,6 +64,8 @@ export function SidebarTree({
   onFolderDrop,
   onDocumentDragOver,
   onDocumentDrop,
+  onTreeNodeAfterDragOver,
+  onTreeNodeAfterDrop,
 }: SidebarTreeProps): JSX.Element {
   return (
     <div data-testid="sidebar-root-tree" className="space-y-1.5">
@@ -104,6 +108,8 @@ export function SidebarTree({
               onFolderDrop={onFolderDrop}
               onDocumentDragOver={onDocumentDragOver}
               onDocumentDrop={onDocumentDrop}
+              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
             />
           ) : (
             <DocumentTreeItem
@@ -136,6 +142,8 @@ export function SidebarTree({
               onFolderDrop={onFolderDrop}
               onDocumentDragOver={onDocumentDragOver}
               onDocumentDrop={onDocumentDrop}
+              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
             />
           )
         ))}
