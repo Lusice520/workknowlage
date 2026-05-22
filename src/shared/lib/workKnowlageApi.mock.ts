@@ -121,6 +121,16 @@ export const createMutableFallbackDesktopApi = ({
   const findQuickNoteByDate = (noteDate: string): QuickNoteRecord | null =>
     mutableQuickNotes.find((note) => note.noteDate === noteDate) ?? null;
   const getFolderPackageIds = (folderId: string): string[] => [folderId, ...getDescendantFolderIds(seed.folders, folderId)];
+  const getNextSortOrder = (spaceId: string, parentId: string | null) =>
+    Math.max(
+      -1,
+      ...seed.folders
+        .filter((folder) => folder.spaceId === spaceId && !folder.deletedAt && folder.parentId === parentId)
+        .map((folder) => folder.sortOrder ?? 0),
+      ...seed.documents
+        .filter((document) => document.spaceId === spaceId && !document.deletedAt && document.folderId === parentId)
+        .map((document) => document.sortOrder ?? 0),
+    ) + 1;
   const getDocumentById = (documentId: string, options: { includeDeleted?: boolean } = {}): DocumentRecord | null => {
     const document = seed.documents.find((item) => item.id === documentId) ?? null;
     if (!document) {
@@ -144,6 +154,69 @@ export const createMutableFallbackDesktopApi = ({
     }
 
     return folder;
+  };
+  const getTreeNode = (kind: 'folder' | 'document', id: string) => (
+    kind === 'folder'
+      ? getFolderById(id)
+      : getDocumentById(id)
+  );
+  const reorderTreeNode = (input: {
+    draggedKind: 'folder' | 'document';
+    draggedId: string;
+    targetKind: 'folder' | 'document';
+    targetId: string;
+    position: 'before' | 'after';
+  }) => {
+    const draggedNode = getTreeNode(input.draggedKind, input.draggedId);
+    const targetNode = getTreeNode(input.targetKind, input.targetId);
+
+    if (!draggedNode || !targetNode || draggedNode.spaceId !== targetNode.spaceId || input.draggedId === input.targetId) {
+      throw new Error('Tree reorder target is invalid.');
+    }
+
+    const packageIds = collectTreePackageIds(seed.folders, seed.documents, input.draggedKind, input.draggedId);
+    if (packageIds.folderIds.includes(input.targetId) || packageIds.documentIds.includes(input.targetId)) {
+      throw new Error('Cannot move a node before or after its descendant.');
+    }
+
+    const nextParentId = input.targetKind === 'folder'
+      ? (targetNode as FolderNode).parentId
+      : (targetNode as DocumentRecord).folderId;
+    const siblingItems = [
+      ...seed.folders
+        .filter((folder) => folder.spaceId === targetNode.spaceId && !folder.deletedAt && folder.parentId === nextParentId)
+        .map((folder) => ({ kind: 'folder' as const, id: folder.id, sortOrder: folder.sortOrder ?? 0 })),
+      ...seed.documents
+        .filter((document) => document.spaceId === targetNode.spaceId && !document.deletedAt && document.folderId === nextParentId)
+        .map((document) => ({ kind: 'document' as const, id: document.id, sortOrder: document.sortOrder ?? 0 })),
+    ]
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .filter((item) => !(item.kind === input.draggedKind && item.id === input.draggedId));
+    const targetIndex = siblingItems.findIndex((item) => item.kind === input.targetKind && item.id === input.targetId);
+    const insertIndex = input.position === 'before' ? targetIndex : targetIndex + 1;
+    const nextItems = [
+      ...siblingItems.slice(0, insertIndex),
+      { kind: input.draggedKind, id: input.draggedId },
+      ...siblingItems.slice(insertIndex),
+    ];
+    const orderByNode = new Map(nextItems.map((item, index) => [`${item.kind}:${item.id}`, index]));
+
+    seed.folders = seed.folders.map((folder) => {
+      const sortOrder = orderByNode.get(`folder:${folder.id}`);
+      if (folder.id === input.draggedId && input.draggedKind === 'folder') {
+        return { ...folder, parentId: nextParentId, sortOrder };
+      }
+
+      return sortOrder === undefined ? folder : { ...folder, sortOrder };
+    });
+    seed.documents = seed.documents.map((document) => {
+      const sortOrder = orderByNode.get(`document:${document.id}`);
+      if (document.id === input.draggedId && input.draggedKind === 'document') {
+        return hydrateDocumentRecord({ ...document, folderId: nextParentId, sortOrder });
+      }
+
+      return sortOrder === undefined ? document : hydrateDocumentRecord({ ...document, sortOrder });
+    });
   };
   const rebuildBacklinksForSpace = (spaceId: string) => {
     const activeDocuments = getActiveDocuments(seed.documents, spaceId);
@@ -391,7 +464,7 @@ export const createMutableFallbackDesktopApi = ({
     folders: {
       list: async (spaceId) => getActiveFolders(seed.folders, spaceId),
       create: async (data) => {
-        const nextFolder = { id: `folder-${Date.now()}`, ...data };
+        const nextFolder = { id: `folder-${Date.now()}`, ...data, sortOrder: getNextSortOrder(data.spaceId, data.parentId) };
         seed.folders.push(nextFolder);
         return nextFolder;
       },
@@ -402,8 +475,11 @@ export const createMutableFallbackDesktopApi = ({
       },
       move: async (id, newParentId) => {
         ensureFolderMoveIsValid(seed.folders, id, newParentId);
+        const currentFolder = getFolderById(id);
         seed.folders = seed.folders.map((folder) =>
-          folder.id === id ? { ...folder, parentId: newParentId } : folder
+          folder.id === id && currentFolder
+            ? { ...folder, parentId: newParentId, sortOrder: getNextSortOrder(currentFolder.spaceId, newParentId) }
+            : folder
         );
       },
       moveToSpace: async (id, targetSpaceId) => {
@@ -426,6 +502,7 @@ export const createMutableFallbackDesktopApi = ({
             ...folder,
             spaceId: targetSpaceId,
             parentId: folder.id === id ? null : folder.parentId,
+            sortOrder: folder.id === id ? getNextSortOrder(targetSpaceId, null) : folder.sortOrder,
           };
         });
         seed.documents = seed.documents.map((document) => (
@@ -478,6 +555,7 @@ export const createMutableFallbackDesktopApi = ({
           backlinks: [],
           sections: [],
           isFavorite: false,
+          sortOrder: getNextSortOrder(data.spaceId, data.folderId),
         });
 
         seed.documents.push(nextDocument);
@@ -525,6 +603,7 @@ export const createMutableFallbackDesktopApi = ({
         const nextDocument = {
           ...currentDocument,
           folderId: targetFolderId,
+          sortOrder: getNextSortOrder(currentDocument.spaceId, targetFolderId),
           updatedAt: now,
           updatedAtLabel: new Date(now).toLocaleDateString('zh-CN'),
         };
@@ -563,6 +642,7 @@ export const createMutableFallbackDesktopApi = ({
             ...document,
             spaceId: targetSpaceId,
             folderId: document.id === id ? null : document.folderId,
+            sortOrder: document.id === id ? getNextSortOrder(targetSpaceId, null) : document.sortOrder,
             updatedAt: now,
             updatedAtLabel,
           });
@@ -767,6 +847,7 @@ export const createMutableFallbackDesktopApi = ({
             return right.updatedAtLabel.localeCompare(left.updatedAtLabel, 'zh-CN');
           }),
       }),
+      reorderTreeNode: async (input) => reorderTreeNode(input),
       getTrash: async (spaceId) => getFallbackTrashItems(seed.folders, seed.documents, spaceId),
       restoreTrashItem: async (spaceId, trashRootId) => restoreTrashItem(spaceId, trashRootId),
       deleteTrashItem: async (spaceId, trashRootId) => deleteTrashItem(spaceId, trashRootId),

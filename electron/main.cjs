@@ -5,6 +5,7 @@ const { initDatabase, closeDatabase, getDbPath, getUserDataDir } = require('./db
 const spacesRepo = require('./db/repositories/spaces.cjs');
 const foldersRepo = require('./db/repositories/folders.cjs');
 const documentsRepo = require('./db/repositories/documents.cjs');
+const treeOrderRepo = require('./db/repositories/treeOrder.cjs');
 const spreadsheetsRepo = require('./db/repositories/spreadsheets.cjs');
 const quickNotesRepo = require('./db/repositories/quickNotes.cjs');
 const searchRepo = require('./db/repositories/search.cjs');
@@ -730,6 +731,9 @@ function registerIpcHandlers() {
     folders: foldersRepo.listFolders(spaceId),
     documents: documentsRepo.listDocumentsForSpace(spaceId),
   }));
+  ipcMain.handle('workspace:reorderTreeNode', (_event, input) => {
+    treeOrderRepo.reorderTreeNode(input);
+  });
   ipcMain.handle('workspace:getTrash', (_event, spaceId) => listWorkspaceTrash(spaceId));
   ipcMain.handle('workspace:restoreTrashItem', (_event, spaceId, trashRootId) => restoreTrashItem(spaceId, trashRootId));
   ipcMain.handle('workspace:deleteTrashItem', (_event, spaceId, trashRootId) => deleteTrashItem(spaceId, trashRootId));

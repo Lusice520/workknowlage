@@ -9,6 +9,7 @@ const {
 const spacesRepo = require('../electron/db/repositories/spaces.cjs');
 const foldersRepo = require('../electron/db/repositories/folders.cjs');
 const documentsRepo = require('../electron/db/repositories/documents.cjs');
+const treeOrderRepo = require('../electron/db/repositories/treeOrder.cjs');
 const spreadsheetsRepo = require('../electron/db/repositories/spreadsheets.cjs');
 const { rebuildBacklinksForSpace } = require('../electron/db/repositories/backlinks.cjs');
 const quickNotesRepo = require('../electron/db/repositories/quickNotes.cjs');
@@ -41,6 +42,23 @@ async function runSmoke() {
     spaceId: space.id,
     folderId: folder.id,
     title: 'Smoke Mention Target',
+  });
+  const sortFolder = foldersRepo.createFolder({
+    spaceId: space.id,
+    parentId: null,
+    name: 'Sort Folder Alpha',
+  });
+  const sortDocument = documentsRepo.createDocument({
+    spaceId: space.id,
+    folderId: null,
+    title: 'Sort Doc Bravo',
+  });
+  treeOrderRepo.reorderTreeNode({
+    draggedKind: 'folder',
+    draggedId: sortFolder.id,
+    targetKind: 'document',
+    targetId: sortDocument.id,
+    position: 'after',
   });
   const uploadedAsset = uploadStorage.storeAssets(document.id, [{
     name: 'restore-proof.txt',
@@ -209,6 +227,16 @@ async function runSmoke() {
   const restoredSpreadsheetWorkbook = spreadsheetsRepo.getSpreadsheetWorkbook(spreadsheetDocument.id);
   const restoredMentionTarget = documentsRepo.getDocumentById(mentionTargetDocument.id);
   const restoredQuickNote = quickNotesRepo.getQuickNote(space.id, '2026-03-26');
+  const restoredTreeOrder = [
+    ...foldersRepo.listFolders(space.id)
+      .filter((item) => item.parentId === null && item.name.startsWith('Sort '))
+      .map((item) => ({ title: item.name, sortOrder: item.sortOrder ?? 0 })),
+    ...documentsRepo.listDocumentsForSpace(space.id)
+      .filter((item) => item.folderId === null && item.title.startsWith('Sort '))
+      .map((item) => ({ title: item.title, sortOrder: item.sortOrder ?? 0 })),
+  ]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((item) => item.title);
 
   if (
     !restoredSpace ||
@@ -290,6 +318,7 @@ async function runSmoke() {
       title: restoredSpreadsheetDocument.title,
       workbookCellValue: restoredSpreadsheetCellValue,
     },
+    treeOrder: restoredTreeOrder,
     cleanup: {
       deletedFiles: cleanupResult.deletedFiles,
       deletedDirectories: cleanupResult.deletedDirectories,

@@ -3,7 +3,7 @@ import { getQuickNoteTitle } from '../shared/lib/quickNotes';
 import { deriveOutlineFromContentJson } from '../shared/lib/documentContent';
 import { getWorkKnowlageApi } from '../shared/lib/workKnowlageApi';
 import type { UploadAssetInput } from '../shared/types/preload';
-import type { DocumentCreateOptions, WorkspaceState } from '../shared/types/workspace';
+import type { DocumentCreateOptions, TreeReorderInput, WorkspaceState } from '../shared/types/workspace';
 import type { WorkspaceSessionActionsOptions, WorkspaceSessionActionsState } from './workspaceSessionActionTypes';
 import { collectTreePackageIds } from '../shared/lib/workKnowlageTree';
 import { updateDocumentInState } from './workspaceSessionActionTypes';
@@ -35,6 +35,7 @@ type WorkspaceContentActionsState = Pick<
   | 'createDocument'
   | 'createFolder'
   | 'moveFolder'
+  | 'reorderTreeNode'
   | 'moveFolderToSpace'
   | 'renameFolder'
   | 'renameDocument'
@@ -130,6 +131,29 @@ export function useWorkspaceContentActions({
         ensureExpandedFolderIds: [folderId, ...(newParentId ? [newParentId] : [])],
       });
       markPersistenceFeedback('移动文件夹');
+    },
+    [markPersistenceFeedback, reloadWorkspaceState, workspaceState],
+  );
+
+  const reorderTreeNode = useCallback(
+    async (input: TreeReorderInput) => {
+      if (!workspaceState) {
+        return;
+      }
+
+      const reorder = getWorkKnowlageApi().workspace?.reorderTreeNode;
+      if (!reorder) {
+        throw new Error('当前环境不支持文档树排序');
+      }
+
+      await reorder(input);
+
+      await reloadWorkspaceState({
+        activeDocumentId: workspaceState.activeDocumentId,
+        ensureExpandedFolderIds: [input.targetId],
+        activeCollectionView: 'tree',
+      });
+      markPersistenceFeedback('调整文档树顺序');
     },
     [markPersistenceFeedback, reloadWorkspaceState, workspaceState],
   );
@@ -444,6 +468,7 @@ export function useWorkspaceContentActions({
     createDocument,
     createFolder,
     moveFolder,
+    reorderTreeNode,
     moveFolderToSpace,
     renameFolder,
     renameDocument,

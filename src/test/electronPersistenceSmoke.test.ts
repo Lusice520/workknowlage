@@ -142,6 +142,7 @@ test('creates a backup, restores overwritten data, and cleans orphan attachments
     title: 'Smoke Budget Sheet',
     workbookCellValue: 'Q1 Budget',
   });
+  expect(smokeResult.treeOrder).toEqual(['Sort Doc Bravo', 'Sort Folder Alpha']);
   expect(smokeResult.cleanup).toMatchObject({
     deletedFiles: 1,
     deletedDirectories: 1,

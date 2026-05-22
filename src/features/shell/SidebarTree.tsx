@@ -1,7 +1,7 @@
 import { type DragEvent } from 'react';
-import type { DocumentCreateOptions, DocumentRecord, FolderNode, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, DocumentRecord, FolderNode, TreeReorderInput, WorkspaceState } from '../../shared/types/workspace';
 import { DocumentTreeItem, FolderSection } from './SidebarTreeItems';
-import type { TreeDragState } from './sidebarTreeDnd';
+import type { TreeDragState, TreeNodeDropTarget } from './sidebarTreeDnd';
 export interface SidebarTreeProps {
   state: WorkspaceState;
   editingId: string | null;
@@ -9,12 +9,13 @@ export interface SidebarTreeProps {
   rootDocuments: DocumentRecord[];
   rootFolders: FolderNode[];
   dragState: TreeDragState;
-  dropTargetFolderId: string | null;
+  dropTarget: TreeNodeDropTarget | null;
   onSelectDocument: (documentId: string) => void;
   onToggleFolder: (folderId: string) => void;
   onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onReorderTreeNode: (input: TreeReorderInput) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
@@ -39,12 +40,13 @@ export function SidebarTree({
   rootDocuments,
   rootFolders,
   dragState,
-  dropTargetFolderId,
+  dropTarget,
   onSelectDocument,
   onToggleFolder,
   onCreateDocument,
   onCreateFolder,
   onMoveFolder,
+  onReorderTreeNode,
   onRequestMoveFolderToSpace,
   onRenameFolder,
   onRenameDocument,
@@ -62,69 +64,81 @@ export function SidebarTree({
   onDocumentDrop,
 }: SidebarTreeProps): JSX.Element {
   return (
-    <div className="space-y-1.5">
-      {rootDocuments.map((document) => (
-        <DocumentTreeItem
-          key={document.id}
-          state={state}
-          document={document}
-          activeDocumentId={activeDocumentId}
-          editingId={editingId}
-          sourceFolderId={null}
-          dragState={dragState}
-          dropTargetFolderId={dropTargetFolderId}
-          onSelectDocument={onSelectDocument}
-          onToggleFolder={onToggleFolder}
-          onCreateDocument={onCreateDocument}
-          onCreateFolder={onCreateFolder}
-          onMoveFolder={onMoveFolder}
-          onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
-          onRenameFolder={onRenameFolder}
-          onRenameDocument={onRenameDocument}
-          onMoveDocument={onMoveDocument}
-          onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
-          onStartEditing={onStartEditing}
-          onCancelEditing={onCancelEditing}
-          onDeleteDocument={onDeleteDocument}
-          onDeleteFolder={onDeleteFolder}
-          onTreeDragStart={onTreeDragStart}
-          onTreeDragEnd={onTreeDragEnd}
-          onFolderDragOver={onFolderDragOver}
-          onFolderDrop={onFolderDrop}
-          onDocumentDragOver={onDocumentDragOver}
-          onDocumentDrop={onDocumentDrop}
-        />
-      ))}
-      {rootFolders.map((folder) => (
-        <FolderSection
-          key={folder.id}
-          folder={folder}
-          state={state}
-          editingId={editingId}
-          dragState={dragState}
-          dropTargetFolderId={dropTargetFolderId}
-          onSelectDocument={onSelectDocument}
-          onToggleFolder={onToggleFolder}
-          onCreateDocument={onCreateDocument}
-          onCreateFolder={onCreateFolder}
-          onMoveFolder={onMoveFolder}
-          onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
-          onRenameFolder={onRenameFolder}
-          onRenameDocument={onRenameDocument}
-          onMoveDocument={onMoveDocument}
-          onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
-          onStartEditing={onStartEditing}
-          onCancelEditing={onCancelEditing}
-          onDeleteDocument={onDeleteDocument}
-          onDeleteFolder={onDeleteFolder}
-          onTreeDragStart={onTreeDragStart}
-          onTreeDragEnd={onTreeDragEnd}
-          onFolderDragOver={onFolderDragOver}
-          onFolderDrop={onFolderDrop}
-          onDocumentDragOver={onDocumentDragOver}
-          onDocumentDrop={onDocumentDrop}
-        />
-      ))}
+    <div data-testid="sidebar-root-tree" className="space-y-1.5">
+      {[
+        ...rootFolders.map((folder) => ({ kind: 'folder' as const, node: folder })),
+        ...rootDocuments.map((document) => ({ kind: 'document' as const, node: document })),
+      ]
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => {
+          const sortDiff = (left.item.node.sortOrder ?? 0) - (right.item.node.sortOrder ?? 0);
+          return sortDiff === 0 ? left.index - right.index : sortDiff;
+        })
+        .map(({ item }) => (
+          item.kind === 'folder' ? (
+            <FolderSection
+              key={item.node.id}
+              folder={item.node}
+              state={state}
+              editingId={editingId}
+              dragState={dragState}
+              dropTarget={dropTarget}
+              onSelectDocument={onSelectDocument}
+              onToggleFolder={onToggleFolder}
+              onCreateDocument={onCreateDocument}
+              onCreateFolder={onCreateFolder}
+              onMoveFolder={onMoveFolder}
+              onReorderTreeNode={onReorderTreeNode}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
+              onRenameFolder={onRenameFolder}
+              onRenameDocument={onRenameDocument}
+              onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
+              onStartEditing={onStartEditing}
+              onCancelEditing={onCancelEditing}
+              onDeleteDocument={onDeleteDocument}
+              onDeleteFolder={onDeleteFolder}
+              onTreeDragStart={onTreeDragStart}
+              onTreeDragEnd={onTreeDragEnd}
+              onFolderDragOver={onFolderDragOver}
+              onFolderDrop={onFolderDrop}
+              onDocumentDragOver={onDocumentDragOver}
+              onDocumentDrop={onDocumentDrop}
+            />
+          ) : (
+            <DocumentTreeItem
+              key={item.node.id}
+              state={state}
+              document={item.node}
+              activeDocumentId={activeDocumentId}
+              editingId={editingId}
+              sourceFolderId={null}
+              dragState={dragState}
+              dropTarget={dropTarget}
+              onSelectDocument={onSelectDocument}
+              onToggleFolder={onToggleFolder}
+              onCreateDocument={onCreateDocument}
+              onCreateFolder={onCreateFolder}
+              onMoveFolder={onMoveFolder}
+              onReorderTreeNode={onReorderTreeNode}
+              onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
+              onRenameFolder={onRenameFolder}
+              onRenameDocument={onRenameDocument}
+              onMoveDocument={onMoveDocument}
+              onRequestMoveDocumentToSpace={onRequestMoveDocumentToSpace}
+              onStartEditing={onStartEditing}
+              onCancelEditing={onCancelEditing}
+              onDeleteDocument={onDeleteDocument}
+              onDeleteFolder={onDeleteFolder}
+              onTreeDragStart={onTreeDragStart}
+              onTreeDragEnd={onTreeDragEnd}
+              onFolderDragOver={onFolderDragOver}
+              onFolderDrop={onFolderDrop}
+              onDocumentDragOver={onDocumentDragOver}
+              onDocumentDrop={onDocumentDrop}
+            />
+          )
+        ))}
     </div>
   );
 }

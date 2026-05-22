@@ -3,7 +3,7 @@ import { MantineProvider } from '@mantine/core';
 import { ChevronsUpDown, FileText, Link2, Star } from 'lucide-react';
 import { getRootDocuments, getRootFolders } from '../../shared/lib/workspaceSelectors';
 import type { WorkspaceSearchResultRecord } from '../../shared/types/preload';
-import type { DocumentCreateOptions, Space, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
+import type { DocumentCreateOptions, Space, TreeReorderInput, WorkspaceCollectionView, WorkspaceState } from '../../shared/types/workspace';
 import { SidebarQuickNotePanel } from './SidebarQuickNotePanel';
 import { SidebarRootSection } from './SidebarRootSection';
 import { SpaceSwitcher } from './SpaceSwitcher';
@@ -12,7 +12,11 @@ import {
   isInvalidDocumentDropTarget,
   isInvalidFolderDropTarget,
   isInvalidRootDropTarget,
+  isInvalidTreeReorderTarget,
+  createTreeReorderInput,
+  getTreeNodeDropPosition,
   readTreeDragState,
+  type TreeNodeDropTarget,
   type TreeDragState,
 } from './sidebarTreeDnd';
 
@@ -44,6 +48,7 @@ interface LeftSidebarProps {
   onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onReorderTreeNode: (input: TreeReorderInput) => Promise<void>;
   onRequestMoveFolderToSpace: (folderId: string, folderName: string) => void;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;
@@ -79,6 +84,7 @@ export function LeftSidebar({
   onCreateDocument,
   onCreateFolder,
   onMoveFolder,
+  onReorderTreeNode,
   onRequestMoveFolderToSpace,
   onRenameFolder,
   onRenameDocument,
@@ -99,8 +105,9 @@ export function LeftSidebar({
   const rootFolders = getRootFolders(state);
   const [spaceSwitcherOpen, setSpaceSwitcherOpen] = useState(false);
   const [dragState, setDragState] = useState<TreeDragState>(null);
-  const [dropTargetNodeId, setDropTargetNodeId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<TreeNodeDropTarget | null>(null);
   const [rootDropActive, setRootDropActive] = useState(false);
+  const rootDropAvailable = dragState !== null && !isInvalidRootDropTarget(state, dragState);
 
   const compactSearchResults: WorkspaceSearchResult[] = searchResults.map((result) => ({
     id: result.id,
@@ -119,13 +126,13 @@ export function LeftSidebar({
 
   const resetTreeDragState = () => {
     setDragState(null);
-    setDropTargetNodeId(null);
+    setDropTarget(null);
     setRootDropActive(false);
   };
 
   const handleTreeDragStart = (nextDragState: Exclude<TreeDragState, null>) => {
     setDragState(nextDragState);
-    setDropTargetNodeId(null);
+    setDropTarget(null);
     setRootDropActive(false);
   };
 
@@ -135,8 +142,12 @@ export function LeftSidebar({
 
   const handleFolderDragOver = (event: DragEvent<HTMLElement>, folderId: string) => {
     const nextDragState = readTreeDragState(event, dragState);
+    const position = getTreeNodeDropPosition(event);
     event.stopPropagation();
-    if (isInvalidFolderDropTarget(state, nextDragState, folderId)) {
+    const isInvalidTarget = position === 'inside'
+      ? isInvalidFolderDropTarget(state, nextDragState, folderId)
+      : isInvalidTreeReorderTarget(state, nextDragState, 'folder', folderId);
+    if (isInvalidTarget) {
       return;
     }
 
@@ -146,8 +157,8 @@ export function LeftSidebar({
     if (!dragState) {
       setDragState(nextDragState);
     }
-    if (dropTargetNodeId !== folderId) {
-      setDropTargetNodeId(folderId);
+    if (dropTarget?.id !== folderId || dropTarget.position !== position || dropTarget.kind !== 'folder') {
+      setDropTarget({ kind: 'folder', id: folderId, position });
     }
     if (rootDropActive) {
       setRootDropActive(false);
@@ -156,14 +167,23 @@ export function LeftSidebar({
 
   const handleFolderDrop = async (event: DragEvent<HTMLElement>, folderId: string) => {
     const nextDragState = readTreeDragState(event, dragState);
+    const position = getTreeNodeDropPosition(event);
     event.preventDefault();
     event.stopPropagation();
-    if (isInvalidFolderDropTarget(state, nextDragState, folderId)) {
+    const isInvalidTarget = position === 'inside'
+      ? isInvalidFolderDropTarget(state, nextDragState, folderId)
+      : isInvalidTreeReorderTarget(state, nextDragState, 'folder', folderId);
+    if (isInvalidTarget) {
       resetTreeDragState();
       return;
     }
 
     resetTreeDragState();
+
+    if (nextDragState && position !== 'inside') {
+      await onReorderTreeNode(createTreeReorderInput(nextDragState, 'folder', folderId, position));
+      return;
+    }
 
     if (nextDragState?.kind === 'document') {
       await onMoveDocument(nextDragState.id, folderId);
@@ -177,8 +197,12 @@ export function LeftSidebar({
 
   const handleDocumentDragOver = (event: DragEvent<HTMLElement>, documentId: string) => {
     const nextDragState = readTreeDragState(event, dragState);
+    const position = getTreeNodeDropPosition(event);
     event.stopPropagation();
-    if (isInvalidDocumentDropTarget(state, nextDragState, documentId)) {
+    const isInvalidTarget = position === 'inside'
+      ? isInvalidDocumentDropTarget(state, nextDragState, documentId)
+      : isInvalidTreeReorderTarget(state, nextDragState, 'document', documentId);
+    if (isInvalidTarget) {
       return;
     }
 
@@ -188,8 +212,8 @@ export function LeftSidebar({
     if (!dragState) {
       setDragState(nextDragState);
     }
-    if (dropTargetNodeId !== documentId) {
-      setDropTargetNodeId(documentId);
+    if (dropTarget?.id !== documentId || dropTarget.position !== position || dropTarget.kind !== 'document') {
+      setDropTarget({ kind: 'document', id: documentId, position });
     }
     if (rootDropActive) {
       setRootDropActive(false);
@@ -198,14 +222,23 @@ export function LeftSidebar({
 
   const handleDocumentDrop = async (event: DragEvent<HTMLElement>, documentId: string) => {
     const nextDragState = readTreeDragState(event, dragState);
+    const position = getTreeNodeDropPosition(event);
     event.preventDefault();
     event.stopPropagation();
-    if (isInvalidDocumentDropTarget(state, nextDragState, documentId)) {
+    const isInvalidTarget = position === 'inside'
+      ? isInvalidDocumentDropTarget(state, nextDragState, documentId)
+      : isInvalidTreeReorderTarget(state, nextDragState, 'document', documentId);
+    if (isInvalidTarget) {
       resetTreeDragState();
       return;
     }
 
     resetTreeDragState();
+
+    if (nextDragState && position !== 'inside') {
+      await onReorderTreeNode(createTreeReorderInput(nextDragState, 'document', documentId, position));
+      return;
+    }
 
     if (nextDragState?.kind === 'document') {
       await onMoveDocument(nextDragState.id, documentId);
@@ -230,7 +263,7 @@ export function LeftSidebar({
     if (!dragState) {
       setDragState(nextDragState);
     }
-    setDropTargetNodeId(null);
+    setDropTarget(null);
     if (!rootDropActive) {
       setRootDropActive(true);
     }
@@ -354,6 +387,7 @@ export function LeftSidebar({
           <SidebarRootSection
             rootDocuments={rootDocuments}
             rootFolders={rootFolders}
+            rootDropAvailable={rootDropAvailable}
             rootDropActive={rootDropActive}
             onRootDragOver={handleRootDragOver}
             onRootDrop={(event) => {
@@ -363,12 +397,13 @@ export function LeftSidebar({
             editingId={editingId}
             activeDocumentId={state.activeDocumentId}
             dragState={dragState}
-            dropTargetFolderId={dropTargetNodeId}
+            dropTarget={dropTarget}
             onSelectDocument={onSelectDocument}
             onToggleFolder={onToggleFolder}
             onCreateDocument={onCreateDocument}
             onCreateFolder={onCreateFolder}
             onMoveFolder={onMoveFolder}
+            onReorderTreeNode={onReorderTreeNode}
             onRequestMoveFolderToSpace={onRequestMoveFolderToSpace}
             onRenameFolder={onRenameFolder}
             onRenameDocument={onRenameDocument}

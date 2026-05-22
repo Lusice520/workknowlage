@@ -10,6 +10,7 @@ export interface SidebarRootSectionProps extends Omit<
 > {
   rootDocuments: DocumentRecord[];
   rootFolders: FolderNode[];
+  rootDropAvailable: boolean;
   rootDropActive: boolean;
   onRootDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onRootDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -18,6 +19,7 @@ export interface SidebarRootSectionProps extends Omit<
 export function SidebarRootSection({
   rootDocuments,
   rootFolders,
+  rootDropAvailable,
   rootDropActive,
   onRootDragOver,
   onRootDrop,
@@ -63,6 +65,20 @@ export function SidebarRootSection({
           ]}
         />
       </div>
+      {rootDropAvailable ? (
+        <div
+          data-testid="sidebar-root-drop-strip"
+          className={`mx-1 mb-1 rounded-[8px] border border-dashed px-2 py-1.5 text-center text-[11px] font-medium transition-colors ${
+            rootDropActive
+              ? 'border-blue-300 bg-blue-50 text-blue-700'
+              : 'border-blue-200/80 bg-white/70 text-blue-500'
+          }`}
+          onDragOver={onRootDragOver}
+          onDrop={onRootDrop}
+        >
+          松开移到根目录
+        </div>
+      ) : null}
       <SidebarTree
         {...treeProps}
         rootDocuments={rootDocuments}

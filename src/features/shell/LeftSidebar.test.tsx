@@ -5,6 +5,7 @@ import App from '../../app/App';
 import type { WorkKnowlageDesktopApi } from '../../shared/types/preload';
 import type { WorkspaceState } from '../../shared/types/workspace';
 import { LeftSidebar } from './LeftSidebar';
+import { treeDropPositionMime } from './sidebarTreeDnd';
 
 const originalApi = window.workKnowlage;
 
@@ -156,12 +157,14 @@ function renderSidebarHarness({
   initialState,
   onMoveDocument = vi.fn(async () => {}),
   onMoveFolder = vi.fn(async () => {}),
+  onReorderTreeNode = vi.fn(async () => {}),
   onCreateDocument = vi.fn(async () => {}),
   onCreateFolder = vi.fn(async () => {}),
 }: {
   initialState: WorkspaceState;
   onMoveDocument?: ReturnType<typeof vi.fn>;
   onMoveFolder?: ReturnType<typeof vi.fn>;
+  onReorderTreeNode?: ReturnType<typeof vi.fn>;
   onCreateDocument?: ReturnType<typeof vi.fn>;
   onCreateFolder?: ReturnType<typeof vi.fn>;
 }) {
@@ -265,6 +268,51 @@ function renderSidebarHarness({
             expandedFolderIds: [...new Set([...prev.expandedFolderIds, ...(targetParentId ? [targetParentId] : [])])],
           }));
         }}
+        onReorderTreeNode={async (input) => {
+          await onReorderTreeNode(input);
+          setState((prev) => {
+            const targetFolder = input.targetKind === 'folder'
+              ? prev.seed.folders.find((folder) => folder.id === input.targetId)
+              : null;
+            const targetDocument = input.targetKind === 'document'
+              ? prev.seed.documents.find((document) => document.id === input.targetId)
+              : null;
+            const nextParentId = targetFolder?.parentId ?? targetDocument?.folderId ?? null;
+            const currentItems = [
+              ...prev.seed.folders
+                .filter((folder) => folder.spaceId === prev.activeSpaceId && folder.parentId === nextParentId)
+                .map((folder) => ({ kind: 'folder' as const, id: folder.id })),
+              ...prev.seed.documents
+                .filter((document) => document.spaceId === prev.activeSpaceId && document.folderId === nextParentId)
+                .map((document) => ({ kind: 'document' as const, id: document.id })),
+            ].filter((item) => !(item.kind === input.draggedKind && item.id === input.draggedId));
+            const targetIndex = currentItems.findIndex((item) => item.kind === input.targetKind && item.id === input.targetId);
+            const insertIndex = input.position === 'before' ? targetIndex : targetIndex + 1;
+            const nextItems = [
+              ...currentItems.slice(0, insertIndex),
+              { kind: input.draggedKind, id: input.draggedId },
+              ...currentItems.slice(insertIndex),
+            ];
+            const sortOrderById = new Map(nextItems.map((item, index) => [`${item.kind}:${item.id}`, index]));
+
+            return {
+              ...prev,
+              seed: {
+                ...prev.seed,
+                folders: prev.seed.folders.map((folder) => (
+                  folder.id === input.draggedId && input.draggedKind === 'folder'
+                    ? { ...folder, parentId: nextParentId, sortOrder: sortOrderById.get(`folder:${folder.id}`) ?? folder.sortOrder }
+                    : { ...folder, sortOrder: sortOrderById.get(`folder:${folder.id}`) ?? folder.sortOrder }
+                )),
+                documents: prev.seed.documents.map((document) => (
+                  document.id === input.draggedId && input.draggedKind === 'document'
+                    ? { ...document, folderId: nextParentId, sortOrder: sortOrderById.get(`document:${document.id}`) ?? document.sortOrder }
+                    : { ...document, sortOrder: sortOrderById.get(`document:${document.id}`) ?? document.sortOrder }
+                )),
+              },
+            };
+          });
+        }}
         onRequestMoveFolderToSpace={() => {}}
         onRenameFolder={async () => {}}
         onRenameDocument={async () => {}}
@@ -304,7 +352,7 @@ function renderSidebarHarness({
     render(<Harness />);
     await Promise.resolve();
     await Promise.resolve();
-    return { onMoveDocument, onMoveFolder, onCreateDocument, onCreateFolder };
+    return { onMoveDocument, onMoveFolder, onReorderTreeNode, onCreateDocument, onCreateFolder };
   });
 }
 
@@ -1617,6 +1665,110 @@ test('renders root-level documents in the sidebar root zone and moves documents 
   await waitFor(() => {
     expect(moveDocument).toHaveBeenCalledWith('doc-alpha', null);
     expect(within(rootDropZone).getByText('Alpha Doc')).toBeInTheDocument();
+  });
+});
+
+test('shows an explicit root drop strip when dragging a nested folder back to root', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder' },
+        { id: 'folder-child', spaceId: 'space-alpha', parentId: 'folder-alpha', name: 'Child Folder' },
+      ],
+      documents: [],
+    },
+  };
+
+  const moveFolder = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onMoveFolder: moveFolder });
+
+  const sidebar = screen.getByTestId('left-sidebar');
+  const draggedFolderRow = within(sidebar).getAllByText('Child Folder')[0]?.closest('[role="button"]');
+  const dataTransfer = createDragDataTransfer();
+
+  expect(screen.queryByTestId('sidebar-root-drop-strip')).not.toBeInTheDocument();
+  expect(draggedFolderRow).not.toBeNull();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedFolderRow!, { dataTransfer });
+  });
+
+  const rootDropStrip = screen.getByTestId('sidebar-root-drop-strip');
+  expect(rootDropStrip).toHaveTextContent('松开移到根目录');
+
+  fireEvent.dragOver(rootDropStrip, { dataTransfer });
+  fireEvent.drop(rootDropStrip, { dataTransfer });
+
+  await waitFor(() => {
+    expect(moveFolder).toHaveBeenCalledWith('folder-child', null);
+    expect(within(screen.getByTestId('sidebar-root-drop-zone')).getByText('Child Folder')).toBeInTheDocument();
+  });
+});
+
+test('reorders root folders after a sibling from the target lower half', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: '',
+    expandedFolderIds: [],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+        { id: 'folder-bravo', spaceId: 'space-alpha', parentId: null, name: 'Bravo Folder', sortOrder: 1 },
+      ],
+      documents: [],
+    },
+  };
+
+  const reorderTreeNode = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onReorderTreeNode: reorderTreeNode });
+
+  const rootTree = screen.getByTestId('sidebar-root-tree');
+  const draggedFolderRow = screen.getByTestId('tree-node-folder-folder-alpha');
+  const targetFolderRow = screen.getByTestId('tree-node-folder-folder-bravo');
+  vi.spyOn(targetFolderRow, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 40,
+    left: 0,
+    right: 200,
+    width: 200,
+    height: 40,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const dataTransfer = createDragDataTransfer();
+
+  expect(Array.from(rootTree.querySelectorAll('[data-testid^="tree-node-"]')).map((node) => node.getAttribute('data-testid'))).toEqual([
+    'tree-node-folder-folder-alpha',
+    'tree-node-folder-folder-bravo',
+  ]);
+
+  await act(async () => {
+    fireEvent.dragStart(draggedFolderRow, { dataTransfer });
+  });
+  dataTransfer.setData(treeDropPositionMime, 'after');
+  fireEvent.dragOver(targetFolderRow, { dataTransfer, clientY: 35, offsetY: 35 });
+  fireEvent.drop(targetFolderRow, { dataTransfer, clientY: 35, offsetY: 35 });
+
+  await waitFor(() => {
+    expect(reorderTreeNode).toHaveBeenCalledWith({
+      draggedKind: 'folder',
+      draggedId: 'folder-alpha',
+      targetKind: 'folder',
+      targetId: 'folder-bravo',
+      position: 'after',
+    });
+    expect(Array.from(rootTree.querySelectorAll('[data-testid^="tree-node-"]')).map((node) => node.getAttribute('data-testid'))).toEqual([
+      'tree-node-folder-folder-bravo',
+      'tree-node-folder-folder-alpha',
+    ]);
   });
 });
 

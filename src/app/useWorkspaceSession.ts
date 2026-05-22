@@ -28,6 +28,7 @@ export interface WorkspaceSessionState {
   createDocument: WorkspaceSessionActionsState['createDocument'];
   createFolder: WorkspaceSessionActionsState['createFolder'];
   moveFolder: WorkspaceSessionActionsState['moveFolder'];
+  reorderTreeNode: WorkspaceSessionActionsState['reorderTreeNode'];
   moveFolderToSpace: WorkspaceSessionActionsState['moveFolderToSpace'];
   renameFolder: WorkspaceSessionActionsState['renameFolder'];
   renameDocument: WorkspaceSessionActionsState['renameDocument'];
@@ -137,6 +138,7 @@ export function useWorkspaceSession(
     createDocument: actions.createDocument,
     createFolder: actions.createFolder,
     moveFolder: actions.moveFolder,
+    reorderTreeNode: actions.reorderTreeNode,
     moveFolderToSpace: actions.moveFolderToSpace,
     renameFolder: actions.renameFolder,
     renameDocument: actions.renameDocument,

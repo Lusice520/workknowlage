@@ -9,6 +9,7 @@ export interface FolderNode {
   spaceId: string;
   parentId: string | null;
   name: string;
+  sortOrder?: number;
   deletedAt?: string | null;
   trashRootId?: string | null;
 }
@@ -83,6 +84,7 @@ export interface DocumentRecord {
   folderId: string | null;
   title: string;
   kind?: DocumentKind;
+  sortOrder?: number;
   contentJson: string;
   updatedAt?: string;
   updatedAtLabel: string;
@@ -140,4 +142,15 @@ export interface WorkspaceState {
   activeDocumentId: string;
   expandedFolderIds: string[];
   activeCollectionView?: WorkspaceCollectionView;
+}
+
+export type TreeNodeKind = 'folder' | 'document';
+export type TreeReorderPosition = 'before' | 'after';
+
+export interface TreeReorderInput {
+  draggedKind: TreeNodeKind;
+  draggedId: string;
+  targetKind: TreeNodeKind;
+  targetId: string;
+  position: TreeReorderPosition;
 }

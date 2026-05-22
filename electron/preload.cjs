@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('workKnowlage', {
 
   workspace: {
     getSnapshot: (spaceId) => ipcRenderer.invoke('workspace:getSnapshot', spaceId),
+    reorderTreeNode: (input) => ipcRenderer.invoke('workspace:reorderTreeNode', input),
     getTrash: (spaceId) => ipcRenderer.invoke('workspace:getTrash', spaceId),
     restoreTrashItem: (spaceId, trashRootId) => ipcRenderer.invoke('workspace:restoreTrashItem', spaceId, trashRootId),
     deleteTrashItem: (spaceId, trashRootId) => ipcRenderer.invoke('workspace:deleteTrashItem', spaceId, trashRootId),

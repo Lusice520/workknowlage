@@ -74,8 +74,8 @@ function migrateDocumentsFolderIdNullable(database) {
       `);
       const insertDocument = database.prepare(`
         INSERT INTO documents (
-          id, space_id, folder_id, title, content_json, is_favorite, deleted_at, trash_root_id, word_count, badge_label, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, space_id, folder_id, title, content_json, is_favorite, sort_order, deleted_at, trash_root_id, word_count, badge_label, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const insertDocumentShare = database.prepare(`
         INSERT INTO document_shares (id, document_id, token, enabled, created_at, updated_at)
@@ -110,6 +110,7 @@ function migrateDocumentsFolderIdNullable(database) {
           document.title,
           document.content_json,
           document.is_favorite ?? 0,
+          document.sort_order ?? 0,
           document.deleted_at ?? null,
           document.trash_root_id ?? null,
           document.word_count,
@@ -179,6 +180,78 @@ function migrateDocumentKind(database) {
 
   console.log('[DB] Adding document_kind column to documents table...');
   database.exec("ALTER TABLE documents ADD COLUMN document_kind TEXT NOT NULL DEFAULT 'note' CHECK(document_kind IN ('note','spreadsheet'))");
+}
+
+function migrateDocumentSortOrder(database) {
+  if (!tableExists(database, 'documents')) {
+    return;
+  }
+
+  const documentColumns = database.prepare('PRAGMA table_info(documents)').all();
+  if (documentColumns.find((column) => column.name === 'sort_order')) {
+    return;
+  }
+
+  console.log('[DB] Adding sort_order column to documents table...');
+  database.exec('ALTER TABLE documents ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+
+  if (!tableExists(database, 'folders')) {
+    return;
+  }
+
+  const folders = database
+    .prepare(
+      `SELECT id, 'folder' AS kind, space_id AS spaceId, parent_id AS parentId
+       FROM folders
+       WHERE deleted_at IS NULL
+       ORDER BY space_id, parent_id, sort_order, created_at`
+    )
+    .all();
+  const documents = database
+    .prepare(
+      `SELECT id, 'document' AS kind, space_id AS spaceId, folder_id AS parentId
+       FROM documents
+       WHERE deleted_at IS NULL
+       ORDER BY space_id, folder_id, created_at`
+    )
+    .all();
+  const keyFor = (node) => JSON.stringify([node.spaceId, node.parentId ?? null]);
+  const groupedFolders = new Map();
+  const groupedDocuments = new Map();
+  const keys = new Set();
+
+  folders.forEach((folder) => {
+    const key = keyFor(folder);
+    keys.add(key);
+    groupedFolders.set(key, [...(groupedFolders.get(key) ?? []), folder]);
+  });
+  documents.forEach((document) => {
+    const key = keyFor(document);
+    keys.add(key);
+    groupedDocuments.set(key, [...(groupedDocuments.get(key) ?? []), document]);
+  });
+
+  const updateFolderOrder = database.prepare('UPDATE folders SET sort_order = ? WHERE id = ?');
+  const updateDocumentOrder = database.prepare('UPDATE documents SET sort_order = ? WHERE id = ?');
+  const normalizeOrders = database.transaction(() => {
+    keys.forEach((key) => {
+      const nodes = [
+        ...(groupedFolders.get(key) ?? []),
+        ...(groupedDocuments.get(key) ?? []),
+      ];
+
+      nodes.forEach((node, index) => {
+        if (node.kind === 'folder') {
+          updateFolderOrder.run(index, node.id);
+          return;
+        }
+
+        updateDocumentOrder.run(index, node.id);
+      });
+    });
+  });
+
+  normalizeOrders();
 }
 
 function migrateTrashColumns(database) {
@@ -329,6 +402,7 @@ function initDatabase() {
   migrateDocumentsFavoriteFlag(db);
   migrateDocumentKind(db);
   migrateTrashColumns(db);
+  migrateDocumentSortOrder(db);
   migrateBacklinkSourceBlockId(db);
   migrateDocumentSharePublicColumns(db);
 

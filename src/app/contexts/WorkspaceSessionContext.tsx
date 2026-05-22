@@ -7,6 +7,7 @@ import type {
   FolderNode,
   QuickNoteRecord,
   Space,
+  TreeReorderInput,
   WorkspaceCollectionView,
   WorkspaceState,
 } from '../../shared/types/workspace';
@@ -32,6 +33,7 @@ export interface WorkspaceSessionContextValue {
   onCreateDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   onCreateFolder: (parentId: string | null) => Promise<void>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  onReorderTreeNode: (input: TreeReorderInput) => Promise<void>;
   onMoveFolderToSpace: (folderId: string, targetSpaceId: string) => Promise<void>;
   onRenameFolder: (folderId: string, newName: string) => Promise<void>;
   onRenameDocument: (documentId: string, newTitle: string) => Promise<void>;

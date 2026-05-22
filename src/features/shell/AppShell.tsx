@@ -167,6 +167,7 @@ export function AppShell({ documentNavigationFeedback }: AppShellProps) {
             onCreateDocument={ws.onCreateDocument}
             onCreateFolder={ws.onCreateFolder}
             onMoveFolder={ws.onMoveFolder}
+            onReorderTreeNode={ws.onReorderTreeNode}
             onRequestMoveFolderToSpace={(folderId, folderName) => {
               setMoveToSpaceRequest({ kind: 'folder', id: folderId, label: folderName });
             }}

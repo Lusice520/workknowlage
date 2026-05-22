@@ -6,6 +6,7 @@ const {
   getContainerRow,
   getDescendantContainerIds,
 } = require('./treeContainers.cjs');
+const { getNextTreeSortOrder } = require('./treeOrder.cjs');
 const {
   deriveOutlineFromContentJson,
   deriveSectionsFromContentJson,
@@ -75,6 +76,7 @@ function assembleDocument(row) {
     folderId: row.folder_id,
     title: row.title,
     kind: row.document_kind || 'note',
+    sortOrder: row.sort_order ?? 0,
     contentJson,
     updatedAt: row.updated_at || '',
     updatedAtLabel: formatLocalTimestampLabel(row.updated_at),
@@ -94,7 +96,7 @@ function listDocuments(spaceId, folderId) {
   const db = getDatabase();
   const rows = db
     .prepare(
-      'SELECT * FROM documents WHERE space_id = ? AND folder_id IS ? AND deleted_at IS NULL ORDER BY created_at'
+      'SELECT * FROM documents WHERE space_id = ? AND folder_id IS ? AND deleted_at IS NULL ORDER BY sort_order, created_at'
     )
     .all(spaceId, folderId ?? null);
   return rows.map(assembleDocument);
@@ -151,10 +153,11 @@ function createDocument({ spaceId, folderId, title, kind }) {
   const id = generateId();
   const emptyContent = JSON.stringify([]);
   const documentKind = normalizeDocumentKind(kind);
+  const sortOrder = getNextTreeSortOrder(db, spaceId, folderId ?? null);
   const createTransaction = db.transaction(() => {
     db.prepare(
-      'INSERT INTO documents (id, space_id, folder_id, title, document_kind, content_json, is_favorite, word_count, badge_label) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)'
-    ).run(id, spaceId, folderId ?? null, title, documentKind, emptyContent, '');
+      'INSERT INTO documents (id, space_id, folder_id, title, document_kind, content_json, is_favorite, sort_order, word_count, badge_label) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?)'
+    ).run(id, spaceId, folderId ?? null, title, documentKind, emptyContent, sortOrder, '');
 
     if (documentKind === 'spreadsheet') {
       db.prepare(
@@ -218,8 +221,8 @@ function moveDocument(id, targetFolderId) {
   }
 
   db.prepare(
-    "UPDATE documents SET folder_id = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(targetFolderId ?? null, id);
+    "UPDATE documents SET folder_id = ?, sort_order = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(targetFolderId ?? null, getNextTreeSortOrder(db, currentRow.spaceId, targetFolderId ?? null), id);
 
   return getDocumentById(id);
 }
@@ -256,8 +259,8 @@ function moveDocumentToSpace(id, targetSpaceId) {
     }
 
     db.prepare(
-      "UPDATE documents SET folder_id = NULL, updated_at = datetime('now') WHERE id = ?"
-    ).run(id);
+      "UPDATE documents SET folder_id = NULL, sort_order = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(getNextTreeSortOrder(db, targetSpaceId, null), id);
   });
 
   moveTransaction();

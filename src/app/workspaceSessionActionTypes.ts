@@ -3,6 +3,7 @@ import type {
   DocumentRecord,
   DocumentCreateOptions,
   QuickNoteRecord,
+  TreeReorderInput,
   WorkspaceCollectionView,
   WorkspaceState,
 } from '../shared/types/workspace';
@@ -27,6 +28,7 @@ export interface WorkspaceSessionActionsState {
   createDocument: (folderId: string | null, options?: DocumentCreateOptions) => Promise<void>;
   createFolder: (parentId: string | null) => Promise<void>;
   moveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  reorderTreeNode: (input: TreeReorderInput) => Promise<void>;
   moveFolderToSpace: (folderId: string, targetSpaceId: string) => Promise<void>;
   renameFolder: (folderId: string, newName: string) => Promise<void>;
   renameDocument: (documentId: string, newTitle: string) => Promise<void>;

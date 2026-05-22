@@ -12,7 +12,7 @@ function seedDatabase(db) {
     'INSERT INTO folders (id, space_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?, ?)'
   );
   const insertDoc = db.prepare(
-    'INSERT INTO documents (id, space_id, folder_id, title, content_json, word_count, badge_label) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO documents (id, space_id, folder_id, title, content_json, sort_order, word_count, badge_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const insertTag = db.prepare(
     'INSERT OR IGNORE INTO tags (id, label, tone) VALUES (?, ?, ?)'
@@ -57,7 +57,7 @@ function seedDatabase(db) {
       },
       { id: 'section-gallery', type: 'gallery', items: ['架构灵感图', '工作台参考'] },
     ]);
-    insertDoc.run('doc-creative-draft', 'personal-workspace', 'folder-inspiration', '创意草案', doc1Sections, 1240, '产品构思');
+    insertDoc.run('doc-creative-draft', 'personal-workspace', 'folder-inspiration', '创意草案', doc1Sections, 0, 1240, '产品构思');
 
     // Document 2: 架构设计
     const doc2Sections = JSON.stringify([
@@ -85,7 +85,7 @@ function seedDatabase(db) {
         children: [],
       },
     ]);
-    insertDoc.run('doc-architecture-design', 'personal-workspace', 'folder-inspiration', '架构设计', doc2Sections, 860, '技术方案');
+    insertDoc.run('doc-architecture-design', 'personal-workspace', 'folder-inspiration', '架构设计', doc2Sections, 1, 860, '技术方案');
 
     // Tags
     insertTag.run('tag-product', '#产品', 'primary');

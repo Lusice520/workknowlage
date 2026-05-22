@@ -6,6 +6,7 @@ const {
   getContainerRow,
   getDescendantContainerIds,
 } = require('./treeContainers.cjs');
+const { getNextTreeSortOrder } = require('./treeOrder.cjs');
 
 function generateId() {
   return crypto.randomUUID();
@@ -16,6 +17,7 @@ function listFolders(spaceId) {
   return db
     .prepare(
       `SELECT id, space_id AS spaceId, parent_id AS parentId, name, deleted_at AS deletedAt, trash_root_id AS trashRootId
+              , sort_order AS sortOrder
        FROM folders
        WHERE space_id = ? AND deleted_at IS NULL
        ORDER BY sort_order, created_at`
@@ -41,12 +43,10 @@ function createFolder({ spaceId, parentId, name }) {
   const db = getDatabase();
   assertValidParentContainer(db, spaceId, parentId || null, 'Folder move target is invalid.');
   const id = generateId();
-  const maxOrder = db
-    .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM folders WHERE space_id = ? AND parent_id IS ?')
-    .get(spaceId, parentId || null);
+  const sortOrder = getNextTreeSortOrder(db, spaceId, parentId || null);
   db.prepare('INSERT INTO folders (id, space_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?, ?)')
-    .run(id, spaceId, parentId || null, name, maxOrder.next);
-  return { id, spaceId, parentId: parentId || null, name };
+    .run(id, spaceId, parentId || null, name, sortOrder);
+  return { id, spaceId, parentId: parentId || null, name, sortOrder };
 }
 
 function renameFolder(id, name) {
@@ -71,12 +71,17 @@ function getFolderPackageStats(spaceId, trashRootId) {
 
 function moveFolder(id, newParentId) {
   const db = getDatabase();
+  const folder = db.prepare('SELECT id, space_id AS spaceId FROM folders WHERE id = ? AND deleted_at IS NULL').get(id);
+
+  if (!folder) {
+    throw new Error('Folder move target is invalid.');
+  }
+
   if (newParentId !== null) {
     if (id === newParentId) {
       throw new Error('Cannot move a folder into itself or its descendant.');
     }
 
-    const folder = db.prepare('SELECT id, space_id AS spaceId FROM folders WHERE id = ? AND deleted_at IS NULL').get(id);
     const targetContainer = getContainerRow(db, newParentId);
     const descendantContainerIds = new Set(getDescendantContainerIds(db, 'folder', id));
 
@@ -89,7 +94,9 @@ function moveFolder(id, newParentId) {
     }
   }
 
-  db.prepare("UPDATE folders SET parent_id = ?, updated_at = datetime('now') WHERE id = ?").run(newParentId || null, id);
+  const sortOrder = getNextTreeSortOrder(db, folder.spaceId, newParentId || null);
+  db.prepare("UPDATE folders SET parent_id = ?, sort_order = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(newParentId || null, sortOrder, id);
 }
 
 function moveFolderToSpace(id, targetSpaceId) {
@@ -104,15 +111,7 @@ function moveFolderToSpace(id, targetSpaceId) {
   }
 
   const { folderIds, documentIds } = collectTreePackageIds(db, 'folder', id);
-  const nextRootSortOrder = db
-    .prepare(
-      `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next
-       FROM folders
-       WHERE space_id = ?
-         AND parent_id IS NULL
-         AND deleted_at IS NULL`
-    )
-    .get(targetSpaceId).next;
+  const nextRootSortOrder = getNextTreeSortOrder(db, targetSpaceId, null);
 
   const moveTransaction = db.transaction(() => {
     if (folderIds.length > 0) {

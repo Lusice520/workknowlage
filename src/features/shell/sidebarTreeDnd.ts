@@ -1,6 +1,6 @@
 import type { DragEvent } from 'react';
 import { getChildDocuments, getChildFolders } from '../../shared/lib/workspaceSelectors';
-import type { WorkspaceState } from '../../shared/types/workspace';
+import type { TreeNodeKind, TreeReorderInput, TreeReorderPosition, WorkspaceState } from '../../shared/types/workspace';
 
 export type TreeDragState =
   | { kind: 'folder'; id: string }
@@ -8,6 +8,7 @@ export type TreeDragState =
   | null;
 
 export const treeDragDataMime = 'application/x-workknowlage-tree-drag';
+export const treeDropPositionMime = 'application/x-workknowlage-tree-drop-position';
 
 export const createFolderDragState = (folderId: string): Exclude<TreeDragState, null> => ({
   kind: 'folder',
@@ -118,3 +119,70 @@ export const isInvalidRootDropTarget = (
   state: WorkspaceState,
   nextDragState: Exclude<TreeDragState, null> | null,
 ): boolean => isInvalidTreeDropTarget(state, nextDragState, null);
+
+export type TreeNodeDropPosition = 'inside' | TreeReorderPosition;
+
+export interface TreeNodeDropTarget {
+  kind: TreeNodeKind;
+  id: string;
+  position: TreeNodeDropPosition;
+}
+
+export const getTreeNodeDropPosition = (event: DragEvent<HTMLElement>): TreeNodeDropPosition => {
+  const forcedPosition = event.dataTransfer.getData(treeDropPositionMime);
+  if (forcedPosition === 'before' || forcedPosition === 'after' || forcedPosition === 'inside') {
+    return forcedPosition;
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect();
+  const nativeOffsetY = (event.nativeEvent as DragEvent<HTMLElement>['nativeEvent'] & { offsetY?: number }).offsetY;
+  if (rect.height <= 0) {
+    const fallbackOffsetY = typeof nativeOffsetY === 'number' && nativeOffsetY > 0 ? nativeOffsetY : event.clientY;
+    if (fallbackOffsetY < 8) {
+      return 'before';
+    }
+    if (fallbackOffsetY > 24) {
+      return 'after';
+    }
+
+    return 'inside';
+  }
+
+  const offsetY = typeof nativeOffsetY === 'number' && nativeOffsetY > 0
+    ? nativeOffsetY
+    : event.clientY - rect.top;
+  if (offsetY < rect.height * 0.28) {
+    return 'before';
+  }
+  if (offsetY > rect.height * 0.72) {
+    return 'after';
+  }
+
+  return 'inside';
+};
+
+export const isInvalidTreeReorderTarget = (
+  state: WorkspaceState,
+  nextDragState: Exclude<TreeDragState, null> | null,
+  targetKind: TreeNodeKind,
+  targetId: string,
+): boolean => {
+  if (!nextDragState || nextDragState.id === targetId) {
+    return true;
+  }
+
+  return targetId !== null && getDescendantTreeNodeIds(state, nextDragState.id).includes(targetId);
+};
+
+export const createTreeReorderInput = (
+  dragState: Exclude<TreeDragState, null>,
+  targetKind: TreeNodeKind,
+  targetId: string,
+  position: TreeReorderPosition,
+): TreeReorderInput => ({
+  draggedKind: dragState.kind,
+  draggedId: dragState.id,
+  targetKind,
+  targetId,
+  position,
+});

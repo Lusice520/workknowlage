@@ -421,6 +421,7 @@ export default function App() {
     onCreateDocument: session.createDocument,
     onCreateFolder: session.createFolder,
     onMoveFolder: session.moveFolder,
+    onReorderTreeNode: session.reorderTreeNode,
     onMoveFolderToSpace: session.moveFolderToSpace,
     onRenameFolder: session.renameFolder,
     onRenameDocument: session.renameDocument,

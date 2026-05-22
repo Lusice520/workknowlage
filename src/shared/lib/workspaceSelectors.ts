@@ -203,3 +203,34 @@ export const getRootDocuments = (state: WorkspaceState): DocumentRecord[] =>
 
 export const getFolderById = (state: WorkspaceState, folderId: string): FolderNode | null =>
   state.seed.folders.find((folder) => folder.id === folderId) ?? null;
+
+export type WorkspaceTreeItem =
+  | { kind: 'folder'; node: FolderNode }
+  | { kind: 'document'; node: DocumentRecord };
+
+const sortTreeItems = (items: WorkspaceTreeItem[]): WorkspaceTreeItem[] =>
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const sortDiff = (left.item.node.sortOrder ?? 0) - (right.item.node.sortOrder ?? 0);
+      if (sortDiff !== 0) {
+        return sortDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ item }) => item);
+
+export const getTreeItemsForContainer = (
+  state: WorkspaceState,
+  parentId: string | null,
+): WorkspaceTreeItem[] => {
+  const folderItems = state.seed.folders
+    .filter((folder) => folder.spaceId === state.activeSpaceId && folder.parentId === parentId)
+    .map((folder): WorkspaceTreeItem => ({ kind: 'folder', node: folder }));
+  const documentItems = state.seed.documents
+    .filter((document) => document.spaceId === state.activeSpaceId && document.folderId === parentId)
+    .map((document): WorkspaceTreeItem => ({ kind: 'document', node: document }));
+
+  return sortTreeItems([...folderItems, ...documentItems]);
+};

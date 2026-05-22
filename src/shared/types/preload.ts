@@ -7,6 +7,7 @@ import type {
   QuickNoteRecord,
   Space,
   TagRecord,
+  TreeReorderInput,
 } from './workspace';
 
 export interface UploadAssetInput {
@@ -188,6 +189,7 @@ export interface WorkKnowlageDesktopApi {
 
   workspace?: {
     getSnapshot: (spaceId: string) => Promise<WorkspaceSnapshotRecord>;
+    reorderTreeNode?: (input: TreeReorderInput) => Promise<void>;
     getTrash?: (spaceId: string) => Promise<TrashItemRecord[]>;
     restoreTrashItem?: (spaceId: string, trashRootId: string) => Promise<boolean>;
     deleteTrashItem?: (spaceId: string, trashRootId: string) => Promise<boolean>;

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS documents (
   document_kind   TEXT NOT NULL DEFAULT 'note' CHECK(document_kind IN ('note','spreadsheet')),
   content_json    TEXT NOT NULL DEFAULT '[]',
   is_favorite     INTEGER NOT NULL DEFAULT 0,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
   deleted_at      TEXT,
   trash_root_id   TEXT,
   word_count      INTEGER NOT NULL DEFAULT 0,
