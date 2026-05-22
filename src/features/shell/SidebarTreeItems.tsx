@@ -86,8 +86,10 @@ function SubtreeExitDropTarget({
   return (
     <div
       data-testid={`tree-node-${kind}-${id}-exit-drop`}
-      className={`my-0.5 h-2 rounded-full transition-colors ${
-        isActive ? 'bg-blue-300/80' : 'bg-transparent hover:bg-blue-100/70'
+      className={`my-0.5 h-5 rounded-[8px] border border-dashed transition-colors ${
+        isActive
+          ? 'border-blue-300 bg-blue-50'
+          : 'border-transparent bg-transparent hover:border-blue-200 hover:bg-blue-50/60'
       }`}
       onDragOver={(event) => onTreeNodeAfterDragOver(event, kind, id)}
       onDrop={(event) => {
@@ -322,7 +324,14 @@ export function DocumentTreeItem({
         ) : null}
       </div>
       {hasChildren && isExpanded ? (
-        <div className={childTreeClass}>
+        <div
+          data-testid={`tree-node-document-${document.id}-children`}
+          className={childTreeClass}
+          onDragOver={(event) => onTreeNodeAfterDragOver(event, 'document', document.id)}
+          onDrop={(event) => {
+            void onTreeNodeAfterDrop(event, 'document', document.id);
+          }}
+        >
           {getTreeItemsForContainer(state, document.id).map((item) => (
             item.kind === 'folder' ? (
               <FolderSection
@@ -392,15 +401,13 @@ export function DocumentTreeItem({
               />
             )
           ))}
-          {dragState ? (
-            <SubtreeExitDropTarget
-              kind="document"
-              id={document.id}
-              dropTarget={dropTarget}
-              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
-              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
-            />
-          ) : null}
+          <SubtreeExitDropTarget
+            kind="document"
+            id={document.id}
+            dropTarget={dropTarget}
+            onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+            onTreeNodeAfterDrop={onTreeNodeAfterDrop}
+          />
         </div>
       ) : null}
     </section>
@@ -602,7 +609,14 @@ export function FolderSection({
         ) : null}
       </div>
       {isExpanded ? (
-        <div className={childTreeClass}>
+        <div
+          data-testid={`tree-node-folder-${folder.id}-children`}
+          className={childTreeClass}
+          onDragOver={(event) => onTreeNodeAfterDragOver(event, 'folder', folder.id)}
+          onDrop={(event) => {
+            void onTreeNodeAfterDrop(event, 'folder', folder.id);
+          }}
+        >
           {getTreeItemsForContainer(state, folder.id).map((item) => (
             item.kind === 'folder' ? (
               <FolderSection
@@ -672,15 +686,13 @@ export function FolderSection({
               />
             )
           ))}
-          {dragState ? (
-            <SubtreeExitDropTarget
-              kind="folder"
-              id={folder.id}
-              dropTarget={dropTarget}
-              onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
-              onTreeNodeAfterDrop={onTreeNodeAfterDrop}
-            />
-          ) : null}
+          <SubtreeExitDropTarget
+            kind="folder"
+            id={folder.id}
+            dropTarget={dropTarget}
+            onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
+            onTreeNodeAfterDrop={onTreeNodeAfterDrop}
+          />
         </div>
       ) : null}
     </section>

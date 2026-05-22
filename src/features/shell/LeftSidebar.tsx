@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { MantineProvider } from '@mantine/core';
 import { ChevronsUpDown, FileText, Link2, Star } from 'lucide-react';
 import { getRootDocuments, getRootFolders } from '../../shared/lib/workspaceSelectors';
@@ -105,6 +105,7 @@ export function LeftSidebar({
   const rootFolders = getRootFolders(state);
   const [spaceSwitcherOpen, setSpaceSwitcherOpen] = useState(false);
   const [dragState, setDragState] = useState<TreeDragState>(null);
+  const dragStateRef = useRef<TreeDragState>(null);
   const [dropTarget, setDropTarget] = useState<TreeNodeDropTarget | null>(null);
   const [rootDropActive, setRootDropActive] = useState(false);
   const rootDropAvailable = dragState !== null && !isInvalidRootDropTarget(state, dragState);
@@ -125,6 +126,7 @@ export function LeftSidebar({
   };
 
   const resetTreeDragState = () => {
+    dragStateRef.current = null;
     setDragState(null);
     setDropTarget(null);
     setRootDropActive(false);
@@ -136,6 +138,7 @@ export function LeftSidebar({
   };
 
   const handleTreeDragStart = (nextDragState: Exclude<TreeDragState, null>) => {
+    dragStateRef.current = nextDragState;
     setDragState(nextDragState);
     setDropTarget(null);
     setRootDropActive(false);
@@ -146,7 +149,7 @@ export function LeftSidebar({
   };
 
   const handleFolderDragOver = (event: DragEvent<HTMLElement>, folderId: string) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     const position = getTreeNodeDropPosition(event);
     event.stopPropagation();
     const isInvalidTarget = position === 'inside'
@@ -161,6 +164,7 @@ export function LeftSidebar({
     event.dataTransfer.dropEffect = 'move';
 
     if (!dragState) {
+      dragStateRef.current = nextDragState;
       setDragState(nextDragState);
     }
     if (dropTarget?.id !== folderId || dropTarget.position !== position || dropTarget.kind !== 'folder') {
@@ -172,7 +176,7 @@ export function LeftSidebar({
   };
 
   const handleFolderDrop = async (event: DragEvent<HTMLElement>, folderId: string) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     const position = getTreeNodeDropPosition(event);
     event.preventDefault();
     event.stopPropagation();
@@ -202,7 +206,7 @@ export function LeftSidebar({
   };
 
   const handleDocumentDragOver = (event: DragEvent<HTMLElement>, documentId: string) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     const position = getTreeNodeDropPosition(event);
     event.stopPropagation();
     const isInvalidTarget = position === 'inside'
@@ -217,6 +221,7 @@ export function LeftSidebar({
     event.dataTransfer.dropEffect = 'move';
 
     if (!dragState) {
+      dragStateRef.current = nextDragState;
       setDragState(nextDragState);
     }
     if (dropTarget?.id !== documentId || dropTarget.position !== position || dropTarget.kind !== 'document') {
@@ -228,7 +233,7 @@ export function LeftSidebar({
   };
 
   const handleDocumentDrop = async (event: DragEvent<HTMLElement>, documentId: string) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     const position = getTreeNodeDropPosition(event);
     event.preventDefault();
     event.stopPropagation();
@@ -262,7 +267,7 @@ export function LeftSidebar({
     targetKind: TreeNodeKind,
     targetId: string,
   ) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     event.stopPropagation();
 
     if (isInvalidTreeReorderTarget(state, nextDragState, targetKind, targetId)) {
@@ -274,6 +279,7 @@ export function LeftSidebar({
     event.dataTransfer.dropEffect = 'move';
 
     if (!dragState) {
+      dragStateRef.current = nextDragState;
       setDragState(nextDragState);
     }
     if (dropTarget?.id !== targetId || dropTarget.position !== 'after' || dropTarget.kind !== targetKind) {
@@ -289,7 +295,7 @@ export function LeftSidebar({
     targetKind: TreeNodeKind,
     targetId: string,
   ) => {
-    const nextDragState = readTreeDragState(event, dragState);
+    const nextDragState = readTreeDragState(event, dragStateRef.current);
     event.preventDefault();
     event.stopPropagation();
 
@@ -303,7 +309,7 @@ export function LeftSidebar({
   };
 
   const handleRootDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragState);
+    const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragStateRef.current);
     if (isInvalidRootDropTarget(state, nextDragState)) {
       clearTreeDropTarget();
       return;
@@ -314,6 +320,7 @@ export function LeftSidebar({
     event.dataTransfer.dropEffect = 'move';
 
     if (!dragState) {
+      dragStateRef.current = nextDragState;
       setDragState(nextDragState);
     }
     setDropTarget(null);
@@ -323,7 +330,7 @@ export function LeftSidebar({
   };
 
   const handleRootDrop = async (event: DragEvent<HTMLDivElement>) => {
-    const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragState);
+    const nextDragState = readTreeDragState(event as DragEvent<HTMLElement>, dragStateRef.current);
     if (isInvalidRootDropTarget(state, nextDragState) || !nextDragState) {
       resetTreeDragState();
       return;

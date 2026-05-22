@@ -28,7 +28,7 @@ export function SidebarRootSection({
   return (
     <div
       data-testid="sidebar-root-drop-zone"
-      className={`mb-2 rounded-[10px] transition-colors ${
+      className={`relative mb-2 rounded-[10px] transition-colors ${
         rootDropActive ? 'bg-blue-50/70 ring-1 ring-blue-200' : ''
       }`}
       onDragOver={onRootDragOver}
@@ -65,20 +65,21 @@ export function SidebarRootSection({
           ]}
         />
       </div>
-      {rootDropAvailable ? (
-        <div
-          data-testid="sidebar-root-drop-strip"
-          className={`mx-1 mb-1 rounded-[8px] border border-dashed px-2 py-1.5 text-center text-[11px] font-medium transition-colors ${
-            rootDropActive
-              ? 'border-blue-300 bg-blue-50 text-blue-700'
-              : 'border-blue-200/80 bg-white/70 text-blue-500'
-          }`}
-          onDragOver={onRootDragOver}
-          onDrop={onRootDrop}
-        >
-          松开移到根目录
-        </div>
-      ) : null}
+      <div
+        data-testid="sidebar-root-drop-strip"
+        aria-hidden={rootDropAvailable ? 'false' : 'true'}
+        className={`absolute left-1 right-1 top-7 z-10 rounded-[8px] border border-dashed px-2 py-1.5 text-center text-[11px] font-medium shadow-sm backdrop-blur transition-all ${
+          rootDropAvailable
+            ? rootDropActive
+              ? 'pointer-events-auto translate-y-0 border-blue-300 bg-blue-50 text-blue-700 opacity-100'
+              : 'pointer-events-auto translate-y-0 border-blue-200/80 bg-white/90 text-blue-500 opacity-100'
+            : 'pointer-events-none -translate-y-1 border-transparent bg-transparent text-transparent opacity-0'
+        }`}
+        onDragOver={onRootDragOver}
+        onDrop={onRootDrop}
+      >
+        松开移到根目录
+      </div>
       <SidebarTree
         {...treeProps}
         rootDocuments={rootDocuments}

@@ -369,6 +369,15 @@ function createDragDataTransfer() {
   };
 }
 
+function createDragOverDataTransferWithoutPayload() {
+  return {
+    setData: vi.fn(),
+    getData: vi.fn(() => ''),
+    effectAllowed: 'move',
+    dropEffect: 'move',
+  };
+}
+
 function fireTreeDragEvent(
   target: HTMLElement,
   type: 'dragOver' | 'drop',
@@ -1711,7 +1720,9 @@ test('shows an explicit root drop strip when dragging a nested folder back to ro
   const draggedFolderRow = within(sidebar).getAllByText('Child Folder')[0]?.closest('[role="button"]');
   const dataTransfer = createDragDataTransfer();
 
-  expect(screen.queryByTestId('sidebar-root-drop-strip')).not.toBeInTheDocument();
+  const stableRootDropStrip = screen.getByTestId('sidebar-root-drop-strip');
+  expect(stableRootDropStrip).toHaveTextContent('松开移到根目录');
+  expect(stableRootDropStrip).toHaveAttribute('aria-hidden', 'true');
   expect(draggedFolderRow).not.toBeNull();
 
   await act(async () => {
@@ -1719,6 +1730,7 @@ test('shows an explicit root drop strip when dragging a nested folder back to ro
   });
 
   const rootDropStrip = screen.getByTestId('sidebar-root-drop-strip');
+  expect(rootDropStrip).toHaveAttribute('aria-hidden', 'false');
   expect(rootDropStrip).toHaveTextContent('松开移到根目录');
 
   fireEvent.dragOver(rootDropStrip, { dataTransfer });
@@ -1890,6 +1902,62 @@ test('clears stale row drop indicators when the current drag target is invalid',
   expect(targetFolderRow.className).not.toContain('border-b-2');
 });
 
+test('keeps dragging when dragover dataTransfer omits custom payload before state rerenders', async () => {
+  const initialState: WorkspaceState = {
+    activeSpaceId: 'space-alpha',
+    activeDocumentId: 'doc-alpha',
+    expandedFolderIds: ['folder-alpha'],
+    seed: {
+      spaces: [{ id: 'space-alpha', name: 'Alpha Space', label: 'WORKSPACE' }],
+      quickLinks: [{ id: 'all-notes', label: '所有笔记' }],
+      folders: [
+        { id: 'folder-alpha', spaceId: 'space-alpha', parentId: null, name: 'Alpha Folder', sortOrder: 0 },
+      ],
+      documents: [
+        {
+          id: 'doc-alpha',
+          spaceId: 'space-alpha',
+          folderId: 'folder-alpha',
+          title: 'Alpha Doc',
+          contentJson: '[]',
+          updatedAtLabel: 'today',
+          wordCountLabel: '10 字',
+          badgeLabel: '',
+          outline: [],
+          tags: [],
+          backlinks: [],
+          sections: [],
+          sortOrder: 0,
+        },
+      ],
+    },
+  };
+
+  const reorderTreeNode = vi.fn(async () => {});
+  await renderSidebarHarness({ initialState, onReorderTreeNode: reorderTreeNode });
+
+  const draggedDocumentRow = screen.getByTestId('tree-node-document-doc-alpha');
+  const folderChildren = screen.getByTestId('tree-node-folder-folder-alpha-children');
+  const dragStartDataTransfer = createDragDataTransfer();
+  const dragOverDataTransfer = createDragOverDataTransferWithoutPayload();
+
+  await act(async () => {
+    fireEvent.dragStart(draggedDocumentRow, { dataTransfer: dragStartDataTransfer });
+    fireTreeDragEvent(folderChildren, 'dragOver', dragOverDataTransfer, { clientY: 80 });
+    fireTreeDragEvent(folderChildren, 'drop', dragOverDataTransfer, { clientY: 80 });
+  });
+
+  await waitFor(() => {
+    expect(reorderTreeNode).toHaveBeenCalledWith({
+      draggedKind: 'document',
+      draggedId: 'doc-alpha',
+      targetKind: 'folder',
+      targetId: 'folder-alpha',
+      position: 'after',
+    });
+  });
+});
+
 test('moves a child document out from the bottom of an expanded folder subtree', async () => {
   const initialState: WorkspaceState = {
     activeSpaceId: 'space-alpha',
@@ -1984,9 +2052,9 @@ test('moves a child folder out from the bottom of an expanded folder subtree', a
     fireEvent.dragStart(draggedFolderRow, { dataTransfer });
   });
 
-  const folderExitDrop = screen.getByTestId('tree-node-folder-folder-alpha-exit-drop');
-  fireTreeDragEvent(folderExitDrop, 'dragOver', dataTransfer, { clientY: 8 });
-  fireTreeDragEvent(folderExitDrop, 'drop', dataTransfer, { clientY: 8 });
+  const folderChildren = screen.getByTestId('tree-node-folder-folder-alpha-children');
+  fireTreeDragEvent(folderChildren, 'dragOver', dataTransfer, { clientY: 80 });
+  fireTreeDragEvent(folderChildren, 'drop', dataTransfer, { clientY: 80 });
 
   await waitFor(() => {
     expect(reorderTreeNode).toHaveBeenCalledWith({
