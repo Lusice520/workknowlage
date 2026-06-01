@@ -27,32 +27,32 @@ This repository is currently best suited for early adopters, developers, and con
 WorkKnowlage already includes the core foundation of a local-first knowledge workbench:
 
 - [x] Local workspace and document management
-- [x]Folder and document tree navigation
-- [x]Manual document tree ordering
-- [x]Block-based editing powered by BlockNote
-- [x]SQLite-backed local persistence
-- [x]Full-text search
-- [x]Block-level search results
-- [x]Search result grouping and highlighting
-- [x]Tags
-- [x]Favorites
-- [x]Bidirectional document references
-- [x]Right sidebar associations
-- [x]Wiki-style related context and evidence aggregation
-- [x]Custom callout blocks
-- [x]Rich table support
-- [x]Mermaid preview support
-- [x]Image and attachment support
-- [x]Export to Markdown
-- [x]Export to Word
-- [x]Export to PDF
-- [x]LAN read-only sharing
-- [x]Temporary public sharing through Cloudflare Tunnel
-- [x]Share password gate and expiry handling
-- [x]External Markdown file opening in a separate window
-- [x]External Markdown autosave back to the original file
-- [x]Manual import from external Markdown files into the knowledge base
-- [x]macOS DMG packaging for local builds
+- [x] Folder and document tree navigation
+- [x] Manual document tree ordering
+- [x] Block-based editing powered by BlockNote
+- [x] SQLite-backed local persistence
+- [x] Full-text search
+- [x] Block-level search results
+- [x] Search result grouping and highlighting
+- [x] 标签
+- [x] Favorites
+- [x] Bidirectional document references
+- [x] Right sidebar associations
+- [x] Wiki-style related context and evidence aggregation
+- [x] Custom callout blocks
+- [x] Rich table support
+- [x] Mermaid preview support
+- [x] Image and attachment support
+- [x] Export to Markdown
+- [x] Export to Word
+- [x] Export to PDF
+- [x] LAN read-only sharing
+- [x] Temporary public sharing through Cloudflare Tunnel
+- [x] Share password gate and expiry handling
+- [x] External Markdown file opening in a separate window
+- [x] External Markdown autosave back to the original file
+- [x] Manual import from external Markdown files into the knowledge base
+- [x] macOS DMG packaging for local builds
 
 ## Not Done Yet
 
