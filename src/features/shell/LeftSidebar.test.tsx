@@ -2004,9 +2004,9 @@ test('moves a child document out from the bottom of an expanded folder subtree',
     fireEvent.dragStart(draggedDocumentRow, { dataTransfer });
   });
 
-  const folderExitDrop = screen.getByTestId('tree-node-folder-folder-alpha-exit-drop');
-  fireTreeDragEvent(folderExitDrop, 'dragOver', dataTransfer, { clientY: 8 });
-  fireTreeDragEvent(folderExitDrop, 'drop', dataTransfer, { clientY: 8 });
+  const folderChildren = screen.getByTestId('tree-node-folder-folder-alpha-children');
+  fireTreeDragEvent(folderChildren, 'dragOver', dataTransfer, { clientY: 80 });
+  fireTreeDragEvent(folderChildren, 'drop', dataTransfer, { clientY: 80 });
 
   await waitFor(() => {
     expect(reorderTreeNode).toHaveBeenCalledWith({

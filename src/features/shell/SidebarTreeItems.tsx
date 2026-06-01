@@ -66,38 +66,7 @@ const getDropPositionClass = (
   return '';
 };
 
-interface SubtreeExitDropTargetProps {
-  kind: TreeNodeKind;
-  id: string;
-  dropTarget: TreeNodeDropTarget | null;
-  onTreeNodeAfterDragOver: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => void;
-  onTreeNodeAfterDrop: (event: DragEvent<HTMLElement>, targetKind: TreeNodeKind, targetId: string) => Promise<void>;
-}
 
-function SubtreeExitDropTarget({
-  kind,
-  id,
-  dropTarget,
-  onTreeNodeAfterDragOver,
-  onTreeNodeAfterDrop,
-}: SubtreeExitDropTargetProps): JSX.Element {
-  const isActive = dropTarget?.kind === kind && dropTarget.id === id && dropTarget.position === 'after';
-
-  return (
-    <div
-      data-testid={`tree-node-${kind}-${id}-exit-drop`}
-      className={`my-0.5 h-5 rounded-[8px] border border-dashed transition-colors ${
-        isActive
-          ? 'border-blue-300 bg-blue-50'
-          : 'border-transparent bg-transparent hover:border-blue-200 hover:bg-blue-50/60'
-      }`}
-      onDragOver={(event) => onTreeNodeAfterDragOver(event, kind, id)}
-      onDrop={(event) => {
-        void onTreeNodeAfterDrop(event, kind, id);
-      }}
-    />
-  );
-}
 
 interface DocumentTreeItemProps {
   state: WorkspaceState;
@@ -401,13 +370,7 @@ export function DocumentTreeItem({
               />
             )
           ))}
-          <SubtreeExitDropTarget
-            kind="document"
-            id={document.id}
-            dropTarget={dropTarget}
-            onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
-            onTreeNodeAfterDrop={onTreeNodeAfterDrop}
-          />
+
         </div>
       ) : null}
     </section>
@@ -686,13 +649,7 @@ export function FolderSection({
               />
             )
           ))}
-          <SubtreeExitDropTarget
-            kind="folder"
-            id={folder.id}
-            dropTarget={dropTarget}
-            onTreeNodeAfterDragOver={onTreeNodeAfterDragOver}
-            onTreeNodeAfterDrop={onTreeNodeAfterDrop}
-          />
+
         </div>
       ) : null}
     </section>
