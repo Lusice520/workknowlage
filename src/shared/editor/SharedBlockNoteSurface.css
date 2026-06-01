@@ -240,6 +240,7 @@
 }
 
 .shared-blocknote-surface .wk-mermaid-preview {
+  position: relative;
   display: block;
   width: 100%;
   overflow-x: auto;
@@ -254,6 +255,104 @@
 .shared-blocknote-surface .wk-mermaid-preview svg {
   display: block;
   max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.shared-blocknote-surface .wk-mermaid-zoom-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  cursor: zoom-in;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.shared-blocknote-surface .wk-mermaid-preview:hover .wk-mermaid-zoom-button,
+.shared-blocknote-surface .wk-mermaid-zoom-button:focus-visible {
+  opacity: 1;
+}
+
+.shared-blocknote-surface .wk-mermaid-zoom-button:hover {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.wk-mermaid-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.wk-mermaid-zoom-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100vw - 56px));
+  height: min(760px, calc(100vh - 56px));
+  border: 1px solid rgba(203, 213, 225, 0.88);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.wk-mermaid-zoom-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.wk-mermaid-zoom-out,
+.wk-mermaid-zoom-reset,
+.wk-mermaid-zoom-in,
+.wk-mermaid-zoom-close {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #334155;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wk-mermaid-zoom-reset {
+  width: auto;
+  min-width: 58px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.wk-mermaid-zoom-viewport {
+  flex: 1;
+  width: 100%;
+  overflow: auto;
+  padding: 32px 40px 40px;
+}
+
+.wk-mermaid-zoom-viewport svg {
+  display: block;
+  max-width: none;
   height: auto;
   margin: 0 auto;
 }

@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
-const { resolveLanShareHost, startShareServer } = require('./server.cjs');
+const { resolveLanShareHost, resolveMermaidDistDir, startShareServer } = require('./server.cjs');
 
 const runtimes: Array<{ close: () => Promise<void> }> = [];
 
@@ -96,6 +96,14 @@ test('serves Mermaid browser bundle for shared diagrams', async () => {
   expect(response.status).toBe(200);
   expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
   expect(body).toContain('mermaid');
+});
+
+test('resolves packaged Mermaid vendor assets before dev node_modules assets', async () => {
+  const resourcesDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workknowlage-mermaid-assets-'));
+  const packagedMermaidDir = path.join(resourcesDir, 'vendor', 'mermaid');
+  await fs.mkdir(packagedMermaidDir, { recursive: true });
+
+  expect(resolveMermaidDistDir({ resourcesPath: resourcesDir })).toBe(packagedMermaidDir);
 });
 
 test('keeps public shares behind a password gate without affecting LAN share urls', async () => {

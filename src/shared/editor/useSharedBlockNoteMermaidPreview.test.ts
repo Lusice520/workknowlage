@@ -87,6 +87,41 @@ describe('renderMermaidPreviewsInEditorRoot', () => {
     expect(preview.querySelector('svg')).not.toBeNull();
   });
 
+  test('adds a zoom control for rendered Mermaid previews', async () => {
+    const root = document.createElement('div');
+    const { block, preview } = createCodeBlock({
+      language: 'mermaid', code: 'graph TD\nA[PRD] --> B[SPEC]',
+    });
+    root.appendChild(block);
+    const renderer = {
+      render: vi.fn(async () => ({ svg: '<svg data-kind="mermaid"><text>Zoom me</text></svg>' })),
+    };
+
+    await renderMermaidPreviewsInEditorRoot(root, renderer);
+    const zoomButton = preview.querySelector<HTMLButtonElement>('.wk-mermaid-zoom-button');
+    expect(zoomButton).not.toBeNull();
+    expect(zoomButton?.getAttribute('aria-label')).toBe('放大 Mermaid 图');
+
+    zoomButton?.click();
+    const overlay = document.querySelector<HTMLElement>('.wk-mermaid-zoom-overlay');
+    expect(overlay).not.toBeNull();
+    const zoomedSvg = overlay?.querySelector<SVGElement>('svg');
+    expect(zoomedSvg).not.toBeNull();
+    expect(zoomedSvg?.style.width).toBe('150%');
+
+    overlay?.querySelector<HTMLButtonElement>('.wk-mermaid-zoom-in')?.click();
+    expect(zoomedSvg?.style.width).toBe('175%');
+
+    overlay?.querySelector<HTMLButtonElement>('.wk-mermaid-zoom-out')?.click();
+    expect(zoomedSvg?.style.width).toBe('150%');
+
+    overlay?.querySelector<HTMLButtonElement>('.wk-mermaid-zoom-reset')?.click();
+    expect(zoomedSvg?.style.width).toBe('100%');
+
+    overlay?.querySelector<HTMLButtonElement>('.wk-mermaid-zoom-close')?.click();
+    expect(document.querySelector('.wk-mermaid-zoom-overlay')).toBeNull();
+  });
+
   test('renders previews from data-language before selector is ready', async () => {
     const root = document.createElement('div');
     const { block, preview } = createCodeBlock({

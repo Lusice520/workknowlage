@@ -120,6 +120,14 @@
         "filter": [
           "cloudflared"
         ]
+      },
+      {
+        "from": "node_modules/mermaid/dist",
+        "to": "vendor/mermaid",
+        "filter": [
+          "mermaid.esm.min.mjs",
+          "chunks/mermaid.esm.min/**/*"
+        ]
       }
     ],
     "mac": {

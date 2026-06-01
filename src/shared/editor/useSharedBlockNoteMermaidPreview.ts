@@ -5,6 +5,13 @@ import { MERMAID_PREVIEW_CLASS } from './KnowledgeBaseCodeBlock';
 const CODE_BLOCK_SELECTOR = '.bn-block-content[data-content-type="codeBlock"]';
 const PREVIEW_SELECTOR = `:scope > .${MERMAID_PREVIEW_CLASS}`;
 const MERMAID_LANGUAGE = 'mermaid';
+const MERMAID_ZOOM_BUTTON_CLASS = 'wk-mermaid-zoom-button';
+const MERMAID_ZOOM_OVERLAY_CLASS = 'wk-mermaid-zoom-overlay';
+const MERMAID_ZOOM_CLOSE_CLASS = 'wk-mermaid-zoom-close';
+const MERMAID_ZOOM_DEFAULT_SCALE = 1.5;
+const MERMAID_ZOOM_MIN_SCALE = 0.5;
+const MERMAID_ZOOM_MAX_SCALE = 3;
+const MERMAID_ZOOM_STEP = 0.25;
 
 export interface EditorMermaidRenderer {
   render: (id: string, source: string) => Promise<{ svg: string }> | { svg: string };
@@ -167,6 +174,144 @@ const cleanupMermaidTempDivs = () => {
   });
 };
 
+const closeMermaidZoomOverlay = () => {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll(`.${MERMAID_ZOOM_OVERLAY_CLASS}`).forEach((overlay) => {
+    overlay.remove();
+  });
+};
+
+const clampMermaidZoomScale = (scale: number) =>
+  Math.min(MERMAID_ZOOM_MAX_SCALE, Math.max(MERMAID_ZOOM_MIN_SCALE, scale));
+
+const openMermaidZoomOverlay = (svg: SVGElement) => {
+  if (typeof document === 'undefined') return;
+  closeMermaidZoomOverlay();
+  let scale = MERMAID_ZOOM_DEFAULT_SCALE;
+
+  const overlay = document.createElement('div');
+  overlay.className = MERMAID_ZOOM_OVERLAY_CLASS;
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Mermaid 图放大查看');
+
+  const panel = document.createElement('div');
+  panel.className = 'wk-mermaid-zoom-panel';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'wk-mermaid-zoom-toolbar';
+
+  const zoomedSvg = svg.cloneNode(true) as SVGElement;
+
+  const applyScale = () => {
+    const percent = Math.round(scale * 100);
+    zoomedSvg.style.width = `${percent}%`;
+    zoomedSvg.style.maxWidth = 'none';
+    zoomedSvg.style.height = 'auto';
+    resetButton.textContent = `${percent}%`;
+  };
+
+  const createScaleButton = (className: string, label: string, text: string, onClick: () => void) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.textContent = text;
+    button.addEventListener('click', onClick);
+    return button;
+  };
+
+  const zoomOutButton = createScaleButton('wk-mermaid-zoom-out', '缩小 Mermaid 图', '-', () => {
+    scale = clampMermaidZoomScale(scale - MERMAID_ZOOM_STEP);
+    applyScale();
+  });
+  const resetButton = createScaleButton('wk-mermaid-zoom-reset', '重置 Mermaid 图缩放', '150%', () => {
+    scale = 1;
+    applyScale();
+  });
+  const zoomInButton = createScaleButton('wk-mermaid-zoom-in', '放大 Mermaid 图', '+', () => {
+    scale = clampMermaidZoomScale(scale + MERMAID_ZOOM_STEP);
+    applyScale();
+  });
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = MERMAID_ZOOM_CLOSE_CLASS;
+  closeButton.setAttribute('aria-label', '关闭放大图');
+  closeButton.textContent = '×';
+
+  const viewport = document.createElement('div');
+  viewport.className = 'wk-mermaid-zoom-viewport';
+  viewport.appendChild(zoomedSvg);
+
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      cleanup();
+      return;
+    }
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      scale = clampMermaidZoomScale(scale + MERMAID_ZOOM_STEP);
+      applyScale();
+      return;
+    }
+    if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      scale = clampMermaidZoomScale(scale - MERMAID_ZOOM_STEP);
+      applyScale();
+      return;
+    }
+    if (event.key === '0') {
+      event.preventDefault();
+      scale = 1;
+      applyScale();
+    }
+  };
+  const cleanup = () => {
+    document.removeEventListener('keydown', onKeydown);
+    overlay.remove();
+  };
+
+  closeButton.addEventListener('click', cleanup);
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) {
+      cleanup();
+    }
+  });
+  document.addEventListener('keydown', onKeydown);
+
+  toolbar.append(zoomOutButton, resetButton, zoomInButton, closeButton);
+  applyScale();
+  panel.append(toolbar, viewport);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  closeButton.focus();
+};
+
+const addMermaidZoomButton = (preview: HTMLElement) => {
+  preview.querySelector(`.${MERMAID_ZOOM_BUTTON_CLASS}`)?.remove();
+  const svg = preview.querySelector<SVGElement>('svg');
+  if (!svg) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = MERMAID_ZOOM_BUTTON_CLASS;
+  button.setAttribute('aria-label', '放大 Mermaid 图');
+  button.title = '放大 Mermaid 图';
+  button.textContent = '⤢';
+  button.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+  });
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openMermaidZoomOverlay(svg);
+  });
+
+  preview.appendChild(button);
+};
+
 export const renderMermaidPreviewsInEditorRoot = async (
   root: HTMLElement | null,
   options?: EditorMermaidRenderer | MermaidPreviewRenderOptions,
@@ -257,6 +402,7 @@ export const renderMermaidPreviewsInEditorRoot = async (
       preview.innerHTML = svg;
       preview.hidden = false;
       preview.dataset.state = 'rendered';
+      addMermaidZoomButton(preview);
 
       stats.rendered += 1;
     } catch (err) {

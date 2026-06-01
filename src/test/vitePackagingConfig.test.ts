@@ -95,6 +95,19 @@ test('keeps renderer-only packages out of packaged production dependencies', () 
   }));
 });
 
+test('copies Mermaid runtime assets for Electron share pages in packaged builds', () => {
+  expect(packageJson.build.extraResources).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      from: 'node_modules/mermaid/dist',
+      to: 'vendor/mermaid',
+      filter: [
+        'mermaid.esm.min.mjs',
+        'chunks/mermaid.esm.min/**/*',
+      ],
+    }),
+  ]));
+});
+
 test('excludes native build source files that are not needed at runtime', () => {
   expect(packageJson.build.files).toEqual(expect.arrayContaining([
     '!node_modules/better-sqlite3/deps/**/*',

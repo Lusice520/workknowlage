@@ -786,6 +786,116 @@ function buildShareHtml({ document, share, origin, spreadsheetWorkbookJson = '' 
   <script type="module">
     import mermaid from '/vendor/mermaid/mermaid.esm.min.mjs';
 
+    const SHARE_MERMAID_DEFAULT_SCALE = 1.5;
+    const SHARE_MERMAID_MIN_SCALE = 0.5;
+    const SHARE_MERMAID_MAX_SCALE = 3;
+    const SHARE_MERMAID_SCALE_STEP = 0.25;
+    const clampShareMermaidScale = (scale) => Math.min(
+      SHARE_MERMAID_MAX_SCALE,
+      Math.max(SHARE_MERMAID_MIN_SCALE, scale),
+    );
+
+    const closeShareMermaidZoom = () => {
+      document.querySelectorAll('.share-mermaid-zoom-overlay').forEach((overlay) => overlay.remove());
+    };
+
+    const openShareMermaidZoom = (svg) => {
+      if (!svg) return;
+      closeShareMermaidZoom();
+      let scale = SHARE_MERMAID_DEFAULT_SCALE;
+      const overlay = document.createElement('div');
+      overlay.className = 'share-mermaid-zoom-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-label', 'Mermaid 图放大查看');
+
+      const panel = document.createElement('div');
+      panel.className = 'share-mermaid-zoom-panel';
+      const toolbar = document.createElement('div');
+      toolbar.className = 'share-mermaid-zoom-toolbar';
+      const zoomedSvg = svg.cloneNode(true);
+      const applyScale = () => {
+        const percent = Math.round(scale * 100);
+        zoomedSvg.style.width = \`\${percent}%\`;
+        zoomedSvg.style.maxWidth = 'none';
+        zoomedSvg.style.height = 'auto';
+        resetButton.textContent = \`\${percent}%\`;
+      };
+      const createScaleButton = (className, label, text, onClick) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = className;
+        button.setAttribute('aria-label', label);
+        button.title = label;
+        button.textContent = text;
+        button.addEventListener('click', onClick);
+        return button;
+      };
+      const zoomOutButton = createScaleButton('share-mermaid-zoom-out', '缩小 Mermaid 图', '-', () => {
+        scale = clampShareMermaidScale(scale - SHARE_MERMAID_SCALE_STEP);
+        applyScale();
+      });
+      const resetButton = createScaleButton('share-mermaid-zoom-reset', '重置 Mermaid 图缩放', '150%', () => {
+        scale = 1;
+        applyScale();
+      });
+      const zoomInButton = createScaleButton('share-mermaid-zoom-in', '放大 Mermaid 图', '+', () => {
+        scale = clampShareMermaidScale(scale + SHARE_MERMAID_SCALE_STEP);
+        applyScale();
+      });
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.className = 'share-mermaid-zoom-close';
+      closeButton.setAttribute('aria-label', '关闭放大图');
+      closeButton.textContent = '×';
+      const viewport = document.createElement('div');
+      viewport.className = 'share-mermaid-zoom-viewport';
+      viewport.appendChild(zoomedSvg);
+
+      const cleanup = () => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.remove();
+      };
+      const onKeydown = (event) => {
+        if (event.key === 'Escape') {
+          cleanup();
+          return;
+        }
+        if (event.key === '+' || event.key === '=') {
+          event.preventDefault();
+          scale = clampShareMermaidScale(scale + SHARE_MERMAID_SCALE_STEP);
+          applyScale();
+          return;
+        }
+        if (event.key === '-' || event.key === '_') {
+          event.preventDefault();
+          scale = clampShareMermaidScale(scale - SHARE_MERMAID_SCALE_STEP);
+          applyScale();
+          return;
+        }
+        if (event.key === '0') {
+          event.preventDefault();
+          scale = 1;
+          applyScale();
+        }
+      };
+
+      closeButton.addEventListener('click', cleanup);
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) cleanup();
+      });
+      document.addEventListener('keydown', onKeydown);
+
+      toolbar.append(zoomOutButton, resetButton, zoomInButton, closeButton);
+      applyScale();
+      panel.append(toolbar, viewport);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+      closeButton.focus();
+    };
+
+    window.openShareMermaidZoom = openShareMermaidZoom;
+
     const diagrams = Array.from(document.querySelectorAll('.share-mermaid'));
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
 
@@ -798,6 +908,16 @@ function buildShareHtml({ document, share, origin, spreadsheetWorkbookJson = '' 
         const rendered = document.createElement('div');
         rendered.className = 'share-mermaid-rendered';
         rendered.innerHTML = svg;
+        const zoomButton = document.createElement('button');
+        zoomButton.type = 'button';
+        zoomButton.className = 'share-mermaid-zoom-button';
+        zoomButton.setAttribute('aria-label', '放大 Mermaid 图');
+        zoomButton.title = '放大 Mermaid 图';
+        zoomButton.textContent = '⤢';
+        zoomButton.addEventListener('click', () => {
+          openShareMermaidZoom(rendered.querySelector('svg'));
+        });
+        rendered.appendChild(zoomButton);
         diagram.prepend(rendered);
         diagram.dataset.rendered = 'true';
       } catch (error) {
@@ -1091,6 +1211,7 @@ function buildShareHtml({ document, share, origin, spreadsheetWorkbookJson = '' 
       background: transparent;
     }
     .share-mermaid {
+      position: relative;
       max-width: none;
       overflow-x: auto;
       padding: 18px 20px;
@@ -1106,6 +1227,94 @@ function buildShareHtml({ document, share, origin, spreadsheetWorkbookJson = '' 
     .share-mermaid-rendered svg {
       max-width: 100%;
       height: auto;
+    }
+    .share-mermaid-zoom-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #334155;
+      cursor: zoom-in;
+      font-size: 16px;
+      line-height: 1;
+      opacity: 0;
+      transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+    }
+    .share-mermaid:hover .share-mermaid-zoom-button,
+    .share-mermaid-zoom-button:focus-visible {
+      opacity: 1;
+    }
+    .share-mermaid-zoom-button:hover {
+      border-color: rgba(37, 99, 235, 0.42);
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .share-mermaid-zoom-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background: rgba(15, 23, 42, 0.56);
+    }
+    .share-mermaid-zoom-panel {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: min(1120px, calc(100vw - 56px));
+      height: min(760px, calc(100vh - 56px));
+      border: 1px solid rgba(203, 213, 225, 0.88);
+      border-radius: 10px;
+      background: #ffffff;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+    }
+    .share-mermaid-zoom-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+    }
+    .share-mermaid-zoom-out,
+    .share-mermaid-zoom-reset,
+    .share-mermaid-zoom-in,
+    .share-mermaid-zoom-close {
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #334155;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .share-mermaid-zoom-reset {
+      width: auto;
+      min-width: 58px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+    .share-mermaid-zoom-viewport {
+      flex: 1;
+      width: 100%;
+      overflow: auto;
+      padding: 32px 40px 40px;
+    }
+    .share-mermaid-zoom-viewport svg {
+      display: block;
+      max-width: none;
+      height: auto;
+      margin: 0 auto;
     }
     .share-mermaid-source {
       margin: 0;

@@ -8,7 +8,17 @@ const { buildShareHtml } = require('./render.cjs');
 
 const LOOPBACK_SHARE_HOST = '127.0.0.1';
 const SHARE_LISTEN_HOST = '0.0.0.0';
-const MERMAID_DIST_DIR = path.resolve(__dirname, '..', '..', 'node_modules', 'mermaid', 'dist');
+const DEV_MERMAID_DIST_DIR = path.resolve(__dirname, '..', '..', 'node_modules', 'mermaid', 'dist');
+
+function resolveMermaidDistDir(options = {}) {
+  const resourcesPath = String(options.resourcesPath || process.resourcesPath || '').trim();
+  const candidates = [
+    resourcesPath ? path.join(resourcesPath, 'vendor', 'mermaid') : '',
+    DEV_MERMAID_DIST_DIR,
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || DEV_MERMAID_DIST_DIR;
+}
 
 function safeDecodeURIComponent(value) {
   try {
@@ -308,7 +318,7 @@ function startShareServer({ documentsRepo, shareRepository, spreadsheetsRepo = n
     }
 
     if (pathname.startsWith('/vendor/mermaid/')) {
-      const filePath = resolveVendorAssetPath(MERMAID_DIST_DIR, pathname, /^\/vendor\/mermaid\//);
+      const filePath = resolveVendorAssetPath(resolveMermaidDistDir(), pathname, /^\/vendor\/mermaid\//);
       if (!filePath || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         sendText(response, 404, 'Not Found', 'text/plain; charset=utf-8', request.method || 'GET');
         return;
@@ -559,5 +569,6 @@ function startShareServer({ documentsRepo, shareRepository, spreadsheetsRepo = n
 
 module.exports = {
   resolveLanShareHost,
+  resolveMermaidDistDir,
   startShareServer,
 };

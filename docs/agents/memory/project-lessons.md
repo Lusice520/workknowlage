@@ -139,6 +139,10 @@ Keep feature SPEC files flat under `docs/requirements/specs/`. Prefer `<feature_
 
 2026-05-21: WorkKnowlage 导出链路要按目标格式处理字体和图表。DOCX 中文字体不要使用 macOS-only 的 `PingFang SC` 作为 eastAsia 字体，应写入更稳定的 `Microsoft YaHei` 并在正文 TextRun 上显式设置，避免 Word/WPS fallback 成异常字体。PDF 导出 Mermaid 时，应在 renderer 的 export 边界动态加载 Mermaid、预渲染为内联 SVG，再交给 Electron `printToPDF`；不要依赖 data URL 打印窗口再加载相对路径脚本。相关模块：`src/features/export/docxExportUtils.ts`、`src/features/export/exportUtils.ts`、`src/app/useDocumentExport.ts`。
 
+2026-05-29: 分享页 Mermaid 在开发环境可用不代表打包后可用。分享服务器运行在 Electron main 侧，不能依赖 `devDependencies` 里的 `node_modules/mermaid/dist` 一定存在于 packaged app；打包要通过 `extraResources` 复制 `mermaid.esm.min.mjs` 和 `chunks/mermaid.esm.min/**/*` 到 `Resources/vendor/mermaid`，服务器优先从 `process.resourcesPath/vendor/mermaid` 读取，再 fallback 到开发态 `node_modules`。排查分享页 Mermaid 空白时，先检查 packaged app 的 `/vendor/mermaid/mermaid.esm.min.mjs` 是否 200，而不只看 `buildShareHtml` 是否生成了 `<figure class="share-mermaid">`。
+
+2026-05-29: Mermaid “放大”不能只打开更大的遮罩层。用户期望看到图本身实际缩放，并能继续放大 / 缩小 / 重置比例。编辑器和分享页的 Mermaid zoom overlay 默认应以约 150% 打开，提供 `- / 百分比 / + / 关闭` 控件，并让 cloned SVG 的实际 `width` 随比例变化；测试要断言缩放比例变化，而不只是断言 overlay 存在。
+
 ## How to Add Lessons
 
 当 bug、用户纠正或 architectural decision 会影响未来工作时，追加一条简短 dated note，包含：

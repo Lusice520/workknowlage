@@ -63,6 +63,9 @@ expect(css).toContain(`.shared-blocknote-surface .bn-block-content[data-content-
 	expect(css).toContain(':has(> .wk-mermaid-preview[data-edit="true"]) > .wk-mermaid-preview');
 	expect(css).toContain('border-top: 1px solid rgba(203, 213, 225, 0.82);');
 	expect(css).toContain('.shared-blocknote-surface .wk-mermaid-preview svg {');
+	expect(css).toContain('.shared-blocknote-surface .wk-mermaid-zoom-button {');
+	expect(css).toContain('.wk-mermaid-zoom-overlay {');
+	expect(css).toContain('.wk-mermaid-zoom-viewport svg {');
 	expect(css).toContain('.shared-blocknote-surface .wk-mermaid-preview[data-state="error"] {');
 	expect(css).not.toContain('justify-items: start;');
 	expect(css).not.toContain('.bn-block-content[data-content-type="codeBlock"][data-wk-mermaid="true"] {\n  display: grid;');

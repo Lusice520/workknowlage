@@ -561,6 +561,13 @@ test('renders Mermaid code blocks as diagrams in shared html', () => {
   expect(html).toContain('<figure class="share-mermaid" data-language="mermaid">');
   expect(html).toContain('<pre class="share-mermaid-source"><code class="language-mermaid" data-language="mermaid">graph TD\nA[PRD] --&gt; B[SPEC]</code></pre>');
   expect(html).toContain("import mermaid from '/vendor/mermaid/mermaid.esm.min.mjs';");
+  expect(html).toContain('share-mermaid-zoom-button');
+  expect(html).toContain('openShareMermaidZoom');
+  expect(html).toContain('share-mermaid-zoom-overlay');
+  expect(html).toContain('const SHARE_MERMAID_DEFAULT_SCALE = 1.5;');
+  expect(html).toContain('share-mermaid-zoom-in');
+  expect(html).toContain('share-mermaid-zoom-reset');
+  expect(html).toContain('zoomedSvg.style.width = `${percent}%`;');
   expect(html).toContain("securityLevel: 'strict'");
   expect(html).toContain('window.__wkMermaidReady = true;');
   expect(html).toContain('.share-mermaid[data-rendered="true"] .share-mermaid-source');
