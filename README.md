@@ -1,123 +1,177 @@
-# workknowlage
-<img width="1560" height="979" alt="image" src="https://github.com/user-attachments/assets/6e7e80c4-d65f-47dd-801c-bcf2ead424da" />
-
 # WorkKnowlage
 
-WorkKnowlage is a lightweight local-first knowledge base application for macOS Apple Silicon devices. It is designed as an Obsidian-like knowledge workflow tool with additional extensible capabilities, focused on structured knowledge organization, local control, and future AI-assisted workflows.
+<img width="1560" height="979" alt="WorkKnowlage screenshot" src="https://github.com/user-attachments/assets/6e7e80c4-d65f-47dd-801c-bcf2ead424da" />
 
-## Features
+WorkKnowlage is a lightweight local-first knowledge base application for macOS Apple Silicon devices. It is designed as an Obsidian-like knowledge workflow tool with additional extensible capabilities, focused on structured knowledge organization, local control, practical document workflows, and future AI-assisted knowledge work.
 
-### Available
-- Local document management
-- Directory tree navigation
-- Full-text search
-- Tags
-- Bidirectional links
-- Block-based editing powered by BlockNote
-- Custom callout module
-- Advanced table support
-- Favorites
-- Sharing
-- Export to Markdown, Word, and PDF
-
-### In Progress
-- Graph view
-- Document classification and organization improvements
-- Document templates
-- Local database-oriented knowledge management
-- AI summarization
-- AI retrieval
-- AI Q&A
-
-## Tech Stack
-
-- **Framework:** Electron
-- **Editor:** BlockNote
-- **Platform:** macOS Apple Silicon (M-series)
-
-## Positioning
-
-WorkKnowlage is not intended to be just another generic note-taking app.
-
-It is built as a lightweight local-first knowledge system for users who want:
-
-- local ownership of knowledge
-- a simpler workflow than heavier knowledge tools
-- structured document connections through tags and bidirectional links
-- enhanced editing capabilities such as custom callouts and advanced tables
-- practical knowledge usage features such as sharing, export, and favorites
-- a foundation for richer knowledge workflows over time
+WorkKnowlage is not intended to be just another generic note-taking app. It is built for users who want local ownership of their knowledge, a simpler workflow than heavier knowledge tools, and stronger support for structured editing, search, document relationships, export, and sharing.
 
 ## Current Status
 
 WorkKnowlage is currently in active development.
 
+Current version: `v0.4.2`
+
 At this stage:
 
-- it primarily targets **macOS Apple Silicon (M-series)**
-- it does **not** provide a prebuilt release yet
-- users need to **build the application locally and generate the `.dmg` package themselves**
+- It primarily targets **macOS Apple Silicon (M-series)**.
+- It does **not** provide a public prebuilt release yet.
+- Users need to build the application locally and generate the `.dmg` package themselves.
+- The core local-first knowledge workflow is already usable.
+- The project is currently focused on reliability, packaging, structured knowledge features, and long-term local knowledge workflows.
 
 This repository is currently best suited for early adopters, developers, and contributors.
 
-## Roadmap
+## What Works Today
 
-### v0.1
-- [x] Electron-based macOS application foundation
-- [x] BlockNote editor integration
-- [x] Local document support
-- [x] Directory tree
-- [x] Search
-- [x] Tags
-- [x] Bidirectional links
-- [x] Custom callout module
-- [x] Advanced table support
-- [x] Favorites
-- [x] Sharing
-- [x] Export to Markdown, Word, and PDF
+WorkKnowlage already includes the core foundation of a local-first knowledge workbench:
 
-### v0.2
-- [ ] Graph view
-- [ ] Improved navigation and browsing
-- [ ] Better document classification
-- [ ] More robust local persistence
+- Local workspace and document management
+- Folder and document tree navigation
+- Manual document tree ordering
+- Block-based editing powered by BlockNote
+- SQLite-backed local persistence
+- Full-text search
+- Block-level search results
+- Search result grouping and highlighting
+- Tags
+- Favorites
+- Bidirectional document references
+- Right sidebar associations
+- Wiki-style related context and evidence aggregation
+- Custom callout blocks
+- Rich table support
+- Mermaid preview support
+- Image and attachment support
+- Export to Markdown
+- Export to Word
+- Export to PDF
+- LAN read-only sharing
+- Temporary public sharing through Cloudflare Tunnel
+- Share password gate and expiry handling
+- External Markdown file opening in a separate window
+- External Markdown autosave back to the original file
+- Manual import from external Markdown files into the knowledge base
+- macOS DMG packaging for local builds
 
-### v0.3
-- [ ] Document templates
-- [ ] Richer metadata support
-- [ ] Enhanced document management
-- [ ] Better structured organization
+## Not Done Yet
 
-### v0.4
-- [ ] Local database-oriented knowledge management
-- [ ] More scalable indexing
-- [ ] Improved filtering and retrieval
+WorkKnowlage is still early and has several important limitations:
 
-### v0.5
-- [ ] AI summarization
-- [ ] AI retrieval
-- [ ] AI Q&A
-- [ ] Smarter knowledge assistance workflows
+- No public prebuilt release package is available yet.
+- macOS distribution is not yet signed and notarized for broad public release.
+- Installation experience still requires local development setup.
+- Graph view is not implemented yet.
+- Document templates are not implemented yet.
+- Rich metadata workflows are still incomplete.
+- Local indexing and retrieval need further scaling work.
+- AI summarization, retrieval, and Q&A are not implemented as product features yet.
+- The current target platform is macOS Apple Silicon; broader platform support is not a priority yet.
+- Some advanced workflows still need more real-world regression testing before broader adoption.
 
-### Future
-- [ ] Prebuilt release packages
-- [ ] Easier installation experience
-- [ ] Broader macOS support
-- [ ] More extensible architecture
-- [ ] Stronger local-first AI integration
+## Product Direction
 
-## Build
+WorkKnowlage is being developed in stages.
 
-WorkKnowlage currently does not provide a prebuilt release package.
+### M1: Local Long-Term Use
 
-To use it, you need to:
+The current milestone focuses on making WorkKnowlage reliable enough for long-term local use.
 
-1. Clone the repository
-2. Set up the local development environment
-3. Build the project locally
-4. Generate the `.dmg` package for installation
+Key focus areas:
 
-Detailed build instructions will be documented as the project evolves.
+- Stable document creation, editing, saving, and reopening
+- Reliable local SQLite persistence
+- Safer local data migration
+- Better editor reliability
+- Stronger search and navigation
+- Export and sharing stability
+- macOS DMG packaging
+- Regression tests for high-risk workflows
+
+### M2: Structured Knowledge Enhancement
+
+The next stage focuses on making the knowledge base more structured and easier to navigate.
+
+Planned work includes:
+
+- Graph view for document relationships
+- Document templates for PRDs, meeting notes, issue records, and retrospectives
+- Richer metadata such as type, status, owner, date, and tags
+- Better document classification and organization
+- Improved sidebar associations
+- Better Wiki-style evidence aggregation
+- More scalable local indexing and retrieval
+
+### M3: Optional AI-Assisted Workflows
+
+AI features are planned as optional enhancements, not as the core identity of the product.
+
+Possible future features include:
+
+- Local-document summarization
+- Retrieval over the local knowledge base
+- Q&A over selected documents or workspaces
+- Smarter document organization suggestions
+- Writing and review assistance for structured documents
+
+AI workflows should remain explicit, optional, 和 designed around user control over what data is sent to external APIs.
+
+## Tech Stack
+
+- **Framework:** Electron
+- **Frontend:** React + TypeScript
+- **Editor:** BlockNote
+- **Local data:** SQLite
+- **Build tooling:** Vite
+- **Testing:** Vitest
+- **Packaging:** electron-builder
+- **Platform:** macOS Apple Silicon (M-series)
+
+## Development
+
+### Requirements
+
+- macOS Apple Silicon
+- Node.js 20 or newer
+- npm
+
+### Install dependencies
+
+```bash
+npm install
+```
+
+### Run in development
+
+```bash
+npm run dev
+```
+
+### Run tests
+
+```bash
+npm test
+```
+
+### Typecheck
+
+```bash
+npm run typecheck
+```
+
+### Build renderer
+
+```bash
+npm run build
+```
+
+### Package macOS DMG
+
+```bash
+npm run package:mac
+```
+
+The generated package will be placed under the `release/` directory.
 
 ## Why This Project
 
@@ -125,14 +179,26 @@ Many knowledge tools are either too heavy, too cloud-dependent, or too generic f
 
 WorkKnowlage explores a different direction: a lightweight, local-first, extensible knowledge base that supports structured knowledge organization, enhanced editing capabilities, practical document usage features, and future AI-assisted knowledge workflows.
 
+The goal is not to replace every note-taking or documentation tool. The goal is to provide a focused local knowledge workbench for users who want to keep ownership of their knowledge while still having strong editing, search, relationship, export, and sharing capabilities.
+
 ## Contributing
 
 Contributions, ideas, and feedback are welcome.
 
-- Open an issue for bugs, ideas, or feature requests
-- Submit a pull request for focused improvements
-- Keep changes clear and well-described
+Useful contribution areas include:
+
+- Bug reports
+- Editor workflow improvements
+- Search quality
+- Export edge cases
+- Sharing reliability
+- macOS packaging
+- Documentation
+- Local-first AI workflow design
+
+Please keep changes focused and well-described. When behavior changes, tests are strongly encouraged.
 
 ## License
 
 WorkKnowlage is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for details.
+```
